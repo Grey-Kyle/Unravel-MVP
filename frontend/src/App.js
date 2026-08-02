@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import AdminDashboard from './AdminDashboard';
+import Profile from './Profile';
 import './App.css';
 
-const API_URL = 'http://localhost:5000';
+const API_URL = '';
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [user, setUser] = useState(null);
   const [view, setView] = useState('login');
- const [isAdmin, setIsAdmin] = useState(localStorage.getItem('isAdmin') === 'true');
+  const [isAdmin, setIsAdmin] = useState(localStorage.getItem('isAdmin') === 'true');
+
   useEffect(() => {
     if (token) {
       fetchUserStats();
@@ -22,17 +24,20 @@ function App() {
         headers: { Authorization: `Bearer ${token}` }
       });
       setUser(res.data);
-      setIsAdmin(res.data.isAdmin); // Update admin status
-      localStorage.setItem('isAdmin', res.data.isAdmin); // Save it!
+      const adminStatus = res.data.isAdmin === true;
+      setIsAdmin(adminStatus);
+      localStorage.setItem('isAdmin', String(adminStatus));
     } catch (err) {
       console.error('Error fetching stats:', err);
-      logout();
+      if (err.response && (err.response.status === 401 || err.response.status === 403)) {
+        logout();
+      }
     }
   };
 
   const logout = () => {
     localStorage.removeItem('token');
-    localStorage.removeItem('isAdmin'); // Add this line!
+    localStorage.removeItem('isAdmin');
     setToken(null);
     setUser(null);
     setIsAdmin(false);
@@ -45,7 +50,9 @@ function App() {
         <h1>Unravel</h1>
         {token && (
           <div className="user-info">
-            <span>EXP: {user?.exp} | Rank: {user?.rank}</span>
+            <span>
+              EXP: {user?.exp ?? '...'} | Rank: {user?.rank ?? '...'}
+            </span>
             <button onClick={logout}>Logout</button>
           </div>
         )}
@@ -57,6 +64,7 @@ function App() {
             <button onClick={() => setView('challenges')}>Challenges</button>
             <button onClick={() => setView('create')}>Create Challenge</button>
             <button onClick={() => setView('leaderboard')}>Leaderboard</button>
+            <button onClick={() => setView('profile')}>Profile</button>
             {isAdmin && (
               <button onClick={() => setView('admin')} className="admin-btn">
                 👑 Admin Dashboard
@@ -76,7 +84,11 @@ function App() {
         {token && view === 'challenges' && <Challenges token={token} refreshStats={fetchUserStats} />}
         {token && view === 'create' && <CreateChallenge token={token} onBack={() => setView('challenges')} />}
         {token && view === 'leaderboard' && <Leaderboard />}
+        {token && view === 'profile' && <Profile token={token} />}
         {token && view === 'admin' && isAdmin && <AdminDashboard token={token} onBack={() => setView('challenges')} />}
+        {token && view === 'admin' && !isAdmin && (
+          <div className="error">Unauthorized: Admin access only.</div>
+        )}
       </main>
     </div>
   );
@@ -92,18 +104,15 @@ function Login({ setToken, setIsAdmin, setView }) {
     e.preventDefault();
     setError('');
     try {
-      const response = await axios.post(`${API_URL}/api/login`, {
-        username,
-        password
-      });
+      const response = await axios.post(`${API_URL}/api/login`, { username, password });
+      const adminStatus = response.data.isAdmin === true;
       localStorage.setItem('token', response.data.token);
+      localStorage.setItem('isAdmin', String(adminStatus));
       setToken(response.data.token);
-      setIsAdmin(response.data.isAdmin || false);
-      localStorage.setItem('isAdmin', response.data.isAdmin);
+      setIsAdmin(adminStatus);
       setView('challenges');
     } catch (err) {
       setError(err.response?.data?.error || 'Login failed');
-      console.error('Login error:', err);
     }
   };
 
@@ -112,20 +121,8 @@ function Login({ setToken, setIsAdmin, setView }) {
       <h2>Login</h2>
       {error && <div className="error">{error}</div>}
       <form onSubmit={handleSubmit}>
-        <input
-          type="text"
-          placeholder="Username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          required
-        />
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-        />
+        <input type="text" placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} required />
+        <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />
         <button type="submit">Login</button>
       </form>
       <p>Don't have an account? <button onClick={() => setView('register')}>Register</button></p>
@@ -143,18 +140,15 @@ function Register({ setToken, setIsAdmin, setView }) {
     e.preventDefault();
     setError('');
     try {
-      const response = await axios.post(`${API_URL}/api/register`, {
-        username,
-        password
-      });
+      const response = await axios.post(`${API_URL}/api/register`, { username, password });
+      const adminStatus = response.data.isAdmin === true;
       localStorage.setItem('token', response.data.token);
+      localStorage.setItem('isAdmin', String(adminStatus));
       setToken(response.data.token);
-      setIsAdmin(response.data.isAdmin || false);
-      localStorage.setItem('isAdmin', response.data.isAdmin);
+      setIsAdmin(adminStatus);
       setView('challenges');
     } catch (err) {
       setError(err.response?.data?.error || 'Registration failed');
-      console.error('Register error:', err);
     }
   };
 
@@ -163,20 +157,8 @@ function Register({ setToken, setIsAdmin, setView }) {
       <h2>Register</h2>
       {error && <div className="error">{error}</div>}
       <form onSubmit={handleSubmit}>
-        <input
-          type="text"
-          placeholder="Username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          required
-        />
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-        />
+        <input type="text" placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} required />
+        <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />
         <button type="submit">Register</button>
       </form>
       <p>Already have an account? <button onClick={() => setView('login')}>Login</button></p>
@@ -190,6 +172,7 @@ function Challenges({ token, refreshStats }) {
   const [selectedChallenge, setSelectedChallenge] = useState(null);
   const [userOutput, setUserOutput] = useState('');
   const [result, setResult] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     fetchChallenges();
@@ -206,8 +189,17 @@ function Challenges({ token, refreshStats }) {
     }
   };
 
+  const handleSelectChallenge = (challenge) => {
+    setSelectedChallenge(challenge);
+    setUserOutput('');
+    setResult(null);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!selectedChallenge) return;
+    setSubmitting(true);
+    setResult(null);
     try {
       const res = await axios.post(
         `${API_URL}/api/challenges/${selectedChallenge.id}/submit`,
@@ -215,11 +207,11 @@ function Challenges({ token, refreshStats }) {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       setResult(res.data);
-      if (res.data.is_correct) {
-        refreshStats();
-      }
+      if (res.data.is_correct) refreshStats();
     } catch (err) {
-      console.error('Submit error:', err);
+      setResult({ is_correct: false, message: err.response?.data?.error || 'Submission failed' });
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -237,10 +229,12 @@ function Challenges({ token, refreshStats }) {
             placeholder="Enter your output..."
             required
           />
-          <button type="submit">Submit Answer</button>
+          <button type="submit" disabled={submitting}>
+            {submitting ? 'Submitting...' : 'Submit Answer'}
+          </button>
         </form>
         {result && (
-          <div className={`result ${result.is_correct ? 'success' : 'error'}`}>
+          <div className={`result ${result.is_correct ? 'correct' : 'incorrect'}`}>
             {result.is_correct ? `✓ Correct! +${result.exp_earned} EXP` : `✗ ${result.message}`}
           </div>
         )}
@@ -252,7 +246,7 @@ function Challenges({ token, refreshStats }) {
     <div className="challenges-list">
       <h2>Challenges</h2>
       {challenges.map(challenge => (
-        <div key={challenge.id} className="challenge-card" onClick={() => setSelectedChallenge(challenge)}>
+        <div key={challenge.id} className="challenge-card" onClick={() => handleSelectChallenge(challenge)}>
           <h3>{challenge.title}</h3>
           <p>Difficulty: {challenge.difficulty} | EXP: {challenge.exp_value}</p>
           {challenge.is_official === 1 && <span className="official-badge"> Official</span>}
@@ -271,21 +265,39 @@ function CreateChallenge({ token, onBack }) {
   const [isOfficial, setIsOfficial] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    let timeoutId;
+    if (success) {
+      timeoutId = setTimeout(() => onBack(), 2000);
+    }
+    return () => clearTimeout(timeoutId);
+  }, [success, onBack]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setSuccess('');
+    setSubmitting(true);
     try {
       await axios.post(
-  `${API_URL}/api/challenges`,
-  { title, code, correct_output: correctOutput, difficulty, language: 'javascript', is_official: isOfficial },
-  { headers: { Authorization: `Bearer ${token}` } }
-);
+        `${API_URL}/api/challenges`,
+        { 
+          title, 
+          code, 
+          correct_output: correctOutput, 
+          difficulty: Number(difficulty), 
+          language: 'javascript', 
+          is_official: isOfficial ? 1 : 0 
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
       setSuccess('Challenge created and verified successfully!');
-      setTimeout(() => onBack(), 2000);
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to create challenge');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -294,67 +306,28 @@ function CreateChallenge({ token, onBack }) {
       <button onClick={onBack} style={{ background: 'none', border: '1px solid #00d9ff', color: '#00d9ff', padding: '8px 16px', borderRadius: '5px', cursor: 'pointer', marginBottom: '20px' }}>
         ← Back to Challenges
       </button>
-      
       <h2 style={{ color: '#00d9ff', marginBottom: '20px', borderBottom: '1px solid #333', paddingBottom: '10px' }}>
         Create New Challenge
       </h2>
 
-      {error && <div className="error" style={{ background: '#ff4d4d', color: 'white', padding: '12px', borderRadius: '5px', marginBottom: '15px', border: '1px solid #cc0000' }}>{error}</div>}
-      {success && <div className="success" style={{ background: '#4caf50', color: 'white', padding: '12px', borderRadius: '5px', marginBottom: '15px', border: '1px solid #2e7d32' }}>{success}</div>}
+      {error && <div className="message error">{error}</div>}
+      {success && <div className="message success">{success}</div>}
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-        <input
-          type="text"
-          placeholder="Challenge Title"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          required
-          style={{ padding: '12px', borderRadius: '5px', border: '1px solid #333', background: '#1a1a2e', color: 'white', fontSize: '16px' }}
-        />
-        
-        <textarea
-          placeholder="Paste your JavaScript code here..."
-          value={code}
-          onChange={(e) => setCode(e.target.value)}
-          required
-          rows="8"
-          style={{ padding: '12px', borderRadius: '5px', border: '1px solid #333', background: '#1a1a2e', color: '#00ff00', fontFamily: 'monospace', fontSize: '14px' }}
-        />
-        
-        <textarea
-          placeholder="Expected Output (what the code should print)"
-          value={correctOutput}
-          onChange={(e) => setCorrectOutput(e.target.value)}
-          required
-          rows="3"
-          style={{ padding: '12px', borderRadius: '5px', border: '1px solid #333', background: '#1a1a2e', color: 'white', fontSize: '14px' }}
-        />
-        
-        <select
-          value={difficulty}
-          onChange={(e) => setDifficulty(Number(e.target.value))}
-          style={{ padding: '12px', borderRadius: '5px', border: '1px solid #333', background: '#1a1a2e', color: 'white', fontSize: '16px' }}
-        >
+        <input type="text" placeholder="Challenge Title" value={title} onChange={(e) => setTitle(e.target.value)} required style={{ padding: '12px', borderRadius: '5px', border: '1px solid #333', background: '#1a1a2e', color: 'white', fontSize: '16px' }} />
+        <textarea placeholder="Paste your JavaScript code here..." value={code} onChange={(e) => setCode(e.target.value)} required rows="8" style={{ padding: '12px', borderRadius: '5px', border: '1px solid #333', background: '#1a1a2e', color: '#00ff00', fontFamily: 'monospace', fontSize: '14px' }} />
+        <textarea placeholder="Expected Output (what the code should print)" value={correctOutput} onChange={(e) => setCorrectOutput(e.target.value)} required rows="3" style={{ padding: '12px', borderRadius: '5px', border: '1px solid #333', background: '#1a1a2e', color: 'white', fontSize: '14px' }} />
+        <select value={difficulty} onChange={(e) => setDifficulty(Number(e.target.value))} style={{ padding: '12px', borderRadius: '5px', border: '1px solid #333', background: '#1a1a2e', color: 'white', fontSize: '16px' }}>
           <option value={1}>Easy (10 EXP)</option>
           <option value={2}>Medium (20 EXP)</option>
           <option value={3}>Hard (30 EXP)</option>
         </select>
-
         <label style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', background: '#1a1a2e', borderRadius: '5px', cursor: 'pointer', marginBottom: '10px' }}>
-  <input
-    type="checkbox"
-    checked={isOfficial}
-    onChange={(e) => setIsOfficial(e.target.checked)}
-    style={{ width: '20px', height: '20px', cursor: 'pointer' }}
-  />
-  <span style={{ color: '#00d9ff', fontWeight: 'bold' }}> Official Challenge</span>
-</label>
-
-        <button
-          type="submit"
-          style={{ padding: '14px', borderRadius: '5px', border: 'none', background: '#00d9ff', color: '#1a1a2e', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', marginTop: '10px', transition: '0.2s' }}
-        >
-          Verify & Create Challenge
+          <input type="checkbox" checked={isOfficial} onChange={(e) => setIsOfficial(e.target.checked)} style={{ width: '20px', height: '20px', cursor: 'pointer' }} />
+          <span style={{ color: '#00d9ff', fontWeight: 'bold' }}> Official Challenge</span>
+        </label>
+        <button type="submit" disabled={submitting} style={{ padding: '14px', borderRadius: '5px', border: 'none', background: '#00d9ff', color: '#1a1a2e', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', marginTop: '10px', opacity: submitting ? 0.7 : 1 }}>
+          {submitting ? 'Verifying...' : 'Verify & Create Challenge'}
         </button>
       </form>
     </div>
@@ -392,7 +365,7 @@ function Leaderboard() {
         </thead>
         <tbody>
           {users.map((user, index) => (
-            <tr key={user.id || index}>
+            <tr key={index}>
               <td>#{index + 1}</td>
               <td>{user.username}</td>
               <td>{user.exp}</td>

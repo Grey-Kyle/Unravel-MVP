@@ -221,15 +221,22 @@ body {
   border-radius: 8px;
   text-align: center;
 }
-
 .result.correct {
-  background: #10b981;
-  color: white;
+  background: #064e3b;
+  color: #34d399;
+  padding: 15px;
+  border-radius: 8px;
+  margin-top: 15px;
+  border: 1px solid #059669;
 }
 
 .result.incorrect {
-  background: #ef4444;
-  color: white;
+  background: #450a0a;
+  color: #f87171;
+  padding: 15px;
+  border-radius: 8px;
+  margin-top: 15px;
+  border: 1px solid #dc2626;
 }
 
 .leaderboard {

@@ -44,61 +44,60 @@ db.exec(`
 
 console.log("Connected to the SQLite database.");
 
-module.exports = db;
+// Insert sample challenges if none exist
+const row = db.prepare("SELECT COUNT(*) as count FROM challenges").get();
 
-// FIXED: Moved sample data insertion outside serialize so we can re-serialize properly
-const sampleChallenges = [
-  {
-    title: "Simple Loop",
-    code: `let sum = 0;\nfor (let i = 1; i <= 5; i++) {\n  sum += i;\n}\nconsole.log(sum);`,
-    correct_output: "15",
-    difficulty: 1,
-    exp_value: 10,
-    language: "javascript",
-    is_official: 1
-  },
-  {
-    title: "Closure Trap",
-    code: `const funcs = [];\nfor (var i = 0; i < 3; i++) {\n  funcs.push(function() {\n    console.log(i);\n  });\n}\nfuncs[0]();`,
-    correct_output: "3",
-    difficulty: 2,
-    exp_value: 25,
-    language: "javascript",
-    is_official: 1
-  },
-  {
-    title: "Async Surprise",
-    code: `console.log(1);\nsetTimeout(() => console.log(2), 0);\nPromise.resolve().then(() => console.log(3));\nconsole.log(4);`,
-    correct_output: "1\n4\n3\n2",
-    difficulty: 3,
-    exp_value: 50,
-    language: "javascript",
-    is_official: 1
-  }
-];
+if (row.count === 0) {
+  const insert = db.prepare(
+    `INSERT INTO challenges (title, code, correct_output, difficulty, exp_value, language, is_official) 
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
+  );
 
-db.get("SELECT COUNT(*) as count FROM challenges", (err, row) => {
-  if (err) return console.error("Error checking challenges:", err);
-  
-  if (row.count === 0) {
-    // FIXED: Re-serialize the inserts so they run in order
-    db.serialize(() => {
-      sampleChallenges.forEach(challenge => {
-        db.run(
-          `INSERT INTO challenges (title, code, correct_output, difficulty, exp_value, language, is_official) 
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [challenge.title, challenge.code, challenge.correct_output, 
-           challenge.difficulty, challenge.exp_value, challenge.language, challenge.is_official],
-          (err) => {
-            if (err) console.error("Error inserting challenge:", err);
-          }
-        );
-      });
-    });
-    console.log("Sample challenges inserted!");
-  } else {
-    console.log(`Database already has ${row.count} challenges, skipping sample insert.`);
-  }
-});
+  const sampleChallenges = [
+    {
+      title: "Simple Loop",
+      code: `let sum = 0;\nfor (let i = 1; i <= 5; i++) {\n  sum += i;\n}\nconsole.log(sum);`,
+      correct_output: "15",
+      difficulty: 1,
+      exp_value: 10,
+      language: "javascript",
+      is_official: 1
+    },
+    {
+      title: "Closure Trap",
+      code: `const funcs = [];\nfor (var i = 0; i < 3; i++) {\n  funcs.push(function() {\n    console.log(i);\n  });\n}\nfuncs[0]();`,
+      correct_output: "3",
+      difficulty: 2,
+      exp_value: 25,
+      language: "javascript",
+      is_official: 1
+    },
+    {
+      title: "Async Surprise",
+      code: `console.log(1);\nsetTimeout(() => console.log(2), 0);\nPromise.resolve().then(() => console.log(3));\nconsole.log(4);`,
+      correct_output: "1\n4\n3\n2",
+      difficulty: 3,
+      exp_value: 50,
+      language: "javascript",
+      is_official: 1
+    }
+  ];
+
+  sampleChallenges.forEach(challenge => {
+    insert.run(
+      challenge.title,
+      challenge.code,
+      challenge.correct_output,
+      challenge.difficulty,
+      challenge.exp_value,
+      challenge.language,
+      challenge.is_official
+    );
+  });
+
+  console.log("Sample challenges inserted!");
+} else {
+  console.log(`Database already has ${row.count} challenges, skipping sample insert.`);
+}
 
 module.exports = db;

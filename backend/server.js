@@ -2,6 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
+const path = require('path');
 const db = require('./database');
 const vm = require('vm');
 require('dotenv').config();
@@ -13,10 +14,9 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-key-change-in-pr
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// ✅ FIXED AUTHENTICATION MIDDLEWARE
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; // Extract token from "Bearer <token>"
+  const token = authHeader && authHeader.split(' ')[1];
   
   if (!token) return res.status(401).json({ error: 'Access denied' });
 
@@ -27,52 +27,51 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// Register
 app.post('/api/register', async (req, res) => {
   const { username, password } = req.body;
   
   if (!username || !password) {
     return res.status(400).json({ error: 'Username and password required' });
   }
+
+  let hashedPassword;
+  try {
+    hashedPassword = await bcrypt.hash(password, 10);
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to hash password' });
+  }
   
-  const hashedPassword = await bcrypt.hash(password, 10);
-  
-  db.run(
-    'INSERT INTO users (username, password_hash, exp, rank, is_admin) VALUES (?, ?, 0, "Novice", 0)',
-    [username, hashedPassword],
-    function(err) {
-      if (err) {
-        if (err.message.includes('UNIQUE constraint failed')) {
-          return res.status(400).json({ error: 'Username already exists' });
-        }
-        return res.status(500).json({ error: err.message });
-      }
-      
-      // Check if this is the first user, if so, make them admin
-      db.get("SELECT COUNT(*) as count FROM users", (err, row) => {
-        if (row.count === 1) {
-          db.run("UPDATE users SET is_admin = 1 WHERE id = ?", [this.lastID]);
-          console.log("First user registered! Promoted to Admin.");
-        }
-      });
-      
-      const token = jwt.sign({ id: this.lastID, username }, JWT_SECRET);
-      res.json({ 
-        token, 
-        userId: this.lastID, 
-        username,
-        isAdmin: false // First user check happens async, but we'll handle it on login
-      });
+  try {
+    const result = db.prepare(
+      'INSERT INTO users (username, password_hash, exp, rank, is_admin) VALUES (?, ?, 0, "Novice", 0)'
+    ).run(username, hashedPassword);
+    
+    const newUserId = result.lastInsertRowid;
+    const row = db.prepare("SELECT COUNT(*) as count FROM users").get();
+    
+    let isAdmin = false;
+    if (row && row.count === 1) {
+      isAdmin = true;
+      db.prepare("UPDATE users SET is_admin = 1 WHERE id = ?").run(newUserId);
+      console.log("First user registered! Promoted to Admin.");
     }
-  );
+    
+    const token = jwt.sign({ id: newUserId, username }, JWT_SECRET);
+    res.json({ token, userId: newUserId, username, isAdmin });
+    
+  } catch (err) {
+    if (err.message.includes('UNIQUE constraint failed')) {
+      return res.status(400).json({ error: 'Username already exists' });
+    }
+    return res.status(500).json({ error: err.message });
+  }
 });
 
-// Login - ✅ SENDS isAdmin STATUS
-app.post('/api/login', (req, res) => {
+app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
   
-  db.get('SELECT * FROM users WHERE username = ?', [username], async (err, user) => {
-    if (err) return res.status(500).json({ error: err.message });
+  try {
+    const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
     if (!user) return res.status(400).json({ error: 'User not found' });
     
     const validPassword = await bcrypt.compare(password, user.password_hash);
@@ -85,113 +84,101 @@ app.post('/api/login', (req, res) => {
       username: user.username, 
       exp: user.exp, 
       rank: user.rank,
-      isAdmin: user.is_admin === 1  // ✅ This is crucial!
+      isAdmin: user.is_admin === 1
     });
-  });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
 });
 
-// Get challenges
 app.get('/api/challenges', authenticateToken, (req, res) => {
-  db.all(
-    `SELECT c.*, u.username as creator_name 
-     FROM challenges c 
-     LEFT JOIN users u ON c.created_by = u.id 
-     ORDER BY c.exp_value DESC`,
-    [],
-    (err, challenges) => {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json(challenges);
-    }
-  );
+  try {
+    const challenges = db.prepare(
+      `SELECT c.*, u.username as creator_name 
+       FROM challenges c 
+       LEFT JOIN users u ON c.created_by = u.id 
+       ORDER BY c.exp_value DESC`
+    ).all();
+    res.json(challenges);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
 });
 
-// Get user stats
 app.get('/api/user/stats', authenticateToken, (req, res) => {
-  const userId = req.user.id;
-  
-  // Added is_admin to the SELECT query
-  db.get("SELECT exp, rank, is_admin FROM users WHERE id = ?", [userId], (err, user) => {
-    if (err) return res.status(500).json({ error: err.message });
+  try {
+    const user = db.prepare("SELECT exp, rank, is_admin FROM users WHERE id = ?").get(req.user.id);
     if (!user) return res.status(404).json({ error: 'User not found' });
     
     res.json({
       exp: user.exp,
       rank: user.rank,
-      isAdmin: user.is_admin === 1 // Send admin status to frontend
+      isAdmin: user.is_admin === 1
     });
-  });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
 });
 
-// Submit challenge answer
 app.post('/api/challenges/:id/submit', authenticateToken, (req, res) => {
   const challengeId = req.params.id;
   const { user_answer } = req.body;
   const userId = req.user.id;
   
-  db.get("SELECT * FROM challenges WHERE id = ?", [challengeId], (err, challenge) => {
-    if (err) return res.status(500).json({ error: err.message });
+  if (typeof user_answer !== 'string') {
+    return res.status(400).json({ error: 'Answer must be a string' });
+  }
+  
+  try {
+    const challenge = db.prepare("SELECT * FROM challenges WHERE id = ?").get(challengeId);
     if (!challenge) return res.status(404).json({ error: 'Challenge not found' });
     
     const is_correct = user_answer.trim() === challenge.correct_output.trim() ? 1 : 0;
     
-    // Check if user already solved this challenge
-    db.get(
-      "SELECT id FROM attempts WHERE user_id = ? AND challenge_id = ? AND is_correct = 1",
-      [userId, challengeId],
-      (err, existingAttempt) => {
-        if (err) return res.status(500).json({ error: err.message });
-        
-        if (existingAttempt && is_correct) {
-          // User already solved it correctly - don't give EXP
-          return res.json({ 
-            is_correct: true, 
-            exp_earned: 0,
-            message: 'You already solved this challenge! No additional EXP awarded.',
-            already_solved: true
-          });
-        }
-        
-        // Insert the attempt
-        db.run(
-          "INSERT INTO attempts (user_id, challenge_id, is_correct) VALUES (?, ?, ?)",
-          [userId, challengeId, is_correct],
-          (err) => {
-            if (err) return res.status(500).json({ error: err.message });
-            
-            if (is_correct) {
-              // Give EXP
-              db.get("SELECT exp FROM users WHERE id = ?", [userId], (err, user) => {
-                if (err) return res.status(500).json({ error: err.message });
-                
-                const newExp = user.exp + challenge.exp_value;
-                let newRank = 'Novice';
-                if (newExp >= 1000) newRank = 'Master';
-                else if (newExp >= 500) newRank = 'Expert';
-                else if (newExp >= 200) newRank = 'Advanced';
-                else if (newExp >= 100) newRank = 'Intermediate';
-                else if (newExp >= 50) newRank = 'Learner';
-                
-                db.run("UPDATE users SET exp = ?, rank = ? WHERE id = ?", [newExp, newRank, userId]);
-                
-                res.json({ 
-                  is_correct: true, 
-                  exp_earned: challenge.exp_value,
-                  new_exp: newExp,
-                  new_rank: newRank 
-                });
-              });
-            } else {
-              // Wrong answer - increase challenge value
-              db.run("UPDATE challenges SET exp_value = exp_value + 5 WHERE id = ?", [challengeId]);
-              res.json({ is_correct: false, message: 'Incorrect. Challenge value increased!' });
-            }
-          }
-        );
-      }
-    );
-  });
+    const existingAttempt = db.prepare(
+      "SELECT id FROM attempts WHERE user_id = ? AND challenge_id = ? AND is_correct = 1"
+    ).get(userId, challengeId);
+    
+    if (existingAttempt && is_correct) {
+      return res.json({ 
+        is_correct: true, 
+        exp_earned: 0,
+        message: 'You already solved this challenge! No additional EXP awarded.',
+        already_solved: true
+      });
+    }
+    
+    db.prepare(
+      "INSERT INTO attempts (user_id, challenge_id, is_correct) VALUES (?, ?, ?)"
+    ).run(userId, challengeId, is_correct);
+    
+    if (is_correct) {
+      const user = db.prepare("SELECT exp FROM users WHERE id = ?").get(userId);
+      const newExp = user.exp + challenge.exp_value;
+      let newRank = 'Novice';
+      if (newExp >= 1000) newRank = 'Master';
+      else if (newExp >= 500) newRank = 'Expert';
+      else if (newExp >= 200) newRank = 'Advanced';
+      else if (newExp >= 100) newRank = 'Intermediate';
+      else if (newExp >= 50) newRank = 'Learner';
+      
+      db.prepare("UPDATE users SET exp = ?, rank = ? WHERE id = ?").run(newExp, newRank, userId);
+      
+      res.json({ 
+        is_correct: true, 
+        exp_earned: challenge.exp_value,
+        new_exp: newExp,
+        new_rank: newRank 
+      });
+    } else {
+      db.prepare("UPDATE challenges SET exp_value = exp_value + 5 WHERE id = ?").run(challengeId);
+      res.json({ is_correct: false, message: 'Incorrect. Challenge value increased!' });
+    }
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
 });
-// Create a new challenge (with verification)
+
 app.post('/api/challenges', authenticateToken, (req, res) => {
   const { title, code, correct_output, difficulty, language, is_official } = req.body;
   const createdBy = req.user.id;
@@ -200,17 +187,37 @@ app.post('/api/challenges', authenticateToken, (req, res) => {
     return res.status(400).json({ error: 'Title, code, and correct output are required' });
   }
   
-  // ... your code verification logic ...
-let output = '';
+  if (typeof difficulty !== 'number' || !Number.isFinite(difficulty) || difficulty < 1) {
+    return res.status(400).json({ error: 'Difficulty must be a positive number' });
+  }
+  
+  let output = '';
+  const makeConsoleMethod = () => (...args) => {
+    output += args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ') + '\n';
+  };
+  
   const mockConsole = { 
-    log: (...args) => { 
-      output += args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ') + '\n'; 
-    } 
+    log: makeConsoleMethod(),
+    error: makeConsoleMethod(),
+    warn: makeConsoleMethod(),
+    info: makeConsoleMethod()
   };
 
   try {
     const script = new vm.Script(code);
-    const context = vm.createContext({ console: mockConsole });
+    const context = vm.createContext({ 
+      console: mockConsole,
+      Math, Date, Array, Object, String, Number, Boolean, JSON, 
+      parseInt, parseFloat, isNaN, isFinite, 
+      encodeURI, decodeURI, encodeURIComponent, decodeURIComponent,
+      undefined, Infinity, NaN,
+      Set, Map, WeakSet, WeakMap, Promise, RegExp, Error, Symbol,
+      BigInt, Intl, Buffer, ArrayBuffer, DataView, 
+      Float32Array, Float64Array, Int8Array, Int16Array, Int32Array,
+      Uint8Array, Uint16Array, Uint32Array, Uint8ClampedArray,
+      SharedArrayBuffer, Atomics, Proxy, Reflect
+    });
+    
     script.runInContext(context, { timeout: 2000 }); 
   } catch (err) {
     return res.status(400).json({ error: 'Code execution failed or timed out: ' + err.message });
@@ -224,55 +231,84 @@ let output = '';
   
   const exp_value = difficulty * 10; 
   
-  db.run(
-    `INSERT INTO challenges (title, code, correct_output, difficulty, exp_value, language, created_by, is_official) 
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [title, code, correct_output, difficulty, exp_value, language || 'javascript', createdBy, is_official ? 1 : 0],
-    function(err) {
-      if (err) return res.status(500).json({ error: err.message });
-      
-      res.json({ 
-        message: 'Challenge created and verified successfully!', 
-        challengeId: this.lastID 
-      });
-    }
-  );
+  try {
+    const user = db.prepare("SELECT is_admin FROM users WHERE id = ?").get(createdBy);
+    const officialFlag = (user && user.is_admin === 1 && is_official) ? 1 : 0;
+    
+    const result = db.prepare(
+      `INSERT INTO challenges (title, code, correct_output, difficulty, exp_value, language, created_by, is_official) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(title, code, correct_output, difficulty, exp_value, language || 'javascript', createdBy, officialFlag);
+    
+    res.json({ 
+      message: 'Challenge created and verified successfully!', 
+      challengeId: result.lastInsertRowid 
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
 });
- 
-// Delete a challenge (admin only)
+
 app.delete('/api/challenges/:id', authenticateToken, (req, res) => {
   const challengeId = req.params.id;
   const userId = req.user.id;
   
-  // Check if user is admin
-  db.get("SELECT is_admin FROM users WHERE id = ?", [userId], (err, user) => {
-    if (err) return res.status(500).json({ error: err.message });
+  try {
+    const user = db.prepare("SELECT is_admin FROM users WHERE id = ?").get(userId);
     if (!user || user.is_admin !== 1) {
       return res.status(403).json({ error: 'Only admins can delete challenges' });
     }
     
-    // Delete the challenge
-    db.run("DELETE FROM challenges WHERE id = ?", [challengeId], function(err) {
-      if (err) return res.status(500).json({ error: err.message });
-      if (this.changes === 0) return res.status(404).json({ error: 'Challenge not found' });
-      
-      res.json({ message: 'Challenge deleted successfully' });
-    });
-  });
-});
-// Get leaderboard
-app.get('/api/leaderboard', (req, res) => {
-  db.all(
-    "SELECT username, exp, rank FROM users ORDER BY exp DESC LIMIT 10",
-    [],
-    (err, users) => {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json(users);
-    }
-  );
+    const result = db.prepare("DELETE FROM challenges WHERE id = ?").run(challengeId);
+    if (result.changes === 0) return res.status(404).json({ error: 'Challenge not found' });
+    
+    res.json({ message: 'Challenge deleted successfully' });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
 });
 
-// Keep server running!
+app.get('/api/leaderboard', (req, res) => {
+  try {
+    const users = db.prepare(
+      "SELECT username, exp, rank FROM users ORDER BY exp DESC LIMIT 10"
+    ).all();
+    res.json(users);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/user/profile', authenticateToken, (req, res) => {
+  const userId = req.user.id;
+  
+  try {
+    const user = db.prepare("SELECT username, exp, rank FROM users WHERE id = ?").get(userId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    
+    const createdRow = db.prepare("SELECT COUNT(*) as created FROM challenges WHERE created_by = ?").get(userId);
+    const solvedRow = db.prepare("SELECT COUNT(DISTINCT challenge_id) as solved FROM attempts WHERE user_id = ? AND is_correct = 1").get(userId);
+    const rankRow = db.prepare("SELECT COUNT(*) + 1 as leaderboardRank FROM users WHERE exp > ?").get(user.exp);
+    
+    res.json({
+      username: user.username,
+      exp: user.exp,
+      rank: user.rank,
+      leaderboardRank: rankRow.leaderboardRank,
+      challengesCreated: createdRow.created,
+      challengesSolved: solvedRow.solved
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.use(express.static(path.join(__dirname, '../frontend/build')));
+
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'));
+});
+
 app.listen(PORT, () => {
   console.log(`Unravel MVP server running on port ${PORT}`);
 });

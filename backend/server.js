@@ -305,7 +305,7 @@ app.get('/api/user/profile', authenticateToken, (req, res) => {
 
 app.use(express.static(path.join(__dirname, '../frontend/build')));
 
-app.get('*', (req, res) => {
+app.use((req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'));
 });
 

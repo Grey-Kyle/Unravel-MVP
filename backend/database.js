@@ -44,7 +44,6 @@ db.exec(`
 
 console.log("Connected to the SQLite database.");
 
-// Insert sample challenges if none exist
 const row = db.prepare("SELECT COUNT(*) as count FROM challenges").get();
 
 if (row.count === 0) {

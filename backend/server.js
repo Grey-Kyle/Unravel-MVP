@@ -43,8 +43,8 @@ app.post('/api/register', async (req, res) => {
   
   try {
     const result = db.prepare(
-      'INSERT INTO users (username, password_hash, exp, rank, is_admin) VALUES (?, ?, 0, "Novice", 0)'
-    ).run(username, hashedPassword);
+  "INSERT INTO users (username, password_hash, exp, rank, is_admin) VALUES (?, ?, 0, 'Novice', 0)"
+).run(username, hashedPassword);
     
     const newUserId = result.lastInsertRowid;
     const row = db.prepare("SELECT COUNT(*) as count FROM users").get();

@@ -221,14 +221,15 @@ function Challenges({ token, refreshStats }) {
         <pre className="code-block">{selectedChallenge.code}</pre>
         <form onSubmit={handleSubmit}>
           <textarea
-            value={userOutput}
-            onChange={(e) => setUserOutput(e.target.value)}
-            placeholder="Enter your output..."
-            required
-          />
-          <button type="submit" disabled={submitting}>
-            {submitting ? 'Submitting...' : 'Submit Answer'}
-          </button>
+  className="answer-textarea"
+  value={userOutput}
+  onChange={(e) => setUserOutput(e.target.value)}
+  placeholder="Enter your output..."
+  required
+/>
+<button type="submit" disabled={submitting} className="answer-submit-btn">
+  {submitting ? 'Verifying...' : 'Submit Answer →'}
+</button>
         </form>
         {result && (
           <div className={`result ${result.is_correct ? 'correct' : 'incorrect'}`}>

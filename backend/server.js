@@ -2,7 +2,6 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
-const path = require('path');
 const db = require('./database');
 const vm = require('vm');
 require('dotenv').config();
@@ -11,7 +10,11 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-key-change-in-production';
 
-app.use(cors());
+// Allow Vercel + local dev
+app.use(cors({
+  origin: true,
+  credentials: true
+}));
 app.use(express.json({ limit: '10mb' }));
 
 const authenticateToken = (req, res, next) => {
@@ -43,8 +46,8 @@ app.post('/api/register', async (req, res) => {
   
   try {
     const result = db.prepare(
-  "INSERT INTO users (username, password_hash, exp, rank, is_admin) VALUES (?, ?, 0, 'Novice', 0)"
-).run(username, hashedPassword);
+      "INSERT INTO users (username, password_hash, exp, rank, is_admin) VALUES (?, ?, 0, 'Novice', 0)"
+    ).run(username, hashedPassword);
     
     const newUserId = result.lastInsertRowid;
     const row = db.prepare("SELECT COUNT(*) as count FROM users").get();
@@ -303,12 +306,7 @@ app.get('/api/user/profile', authenticateToken, (req, res) => {
   }
 });
 
-app.use(express.static(path.join(__dirname, '../frontend/build')));
-
-app.use((req, res) => {
-  res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'));
-});
-
+// NO frontend serving — Vercel handles that now
 app.listen(PORT, () => {
   console.log(`Unravel MVP server running on port ${PORT}`);
 });

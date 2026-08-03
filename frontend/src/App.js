@@ -82,7 +82,7 @@ function App() {
           <Register setToken={setToken} setIsAdmin={setIsAdmin} setView={setView} />
         )}
         {token && view === 'challenges' && <Challenges token={token} refreshStats={fetchUserStats} />}
-        {token && view === 'create' && <CreateChallenge token={token} onBack={() => setView('challenges')} />}
+        {token && view === 'create' && <CreateChallenge token={token} isAdmin={isAdmin} onBack={() => setView('challenges')} />}
         {token && view === 'leaderboard' && <Leaderboard />}
         {token && view === 'profile' && <Profile token={token} />}
         {token && view === 'admin' && isAdmin && <AdminDashboard token={token} onBack={() => setView('challenges')} />}
@@ -249,15 +249,18 @@ function Challenges({ token, refreshStats }) {
         <div key={challenge.id} className="challenge-card" onClick={() => handleSelectChallenge(challenge)}>
           <h3>{challenge.title}</h3>
           <p>Difficulty: {challenge.difficulty} | EXP: {challenge.exp_value}</p>
-          {challenge.is_official === 1 && <span className="official-badge"> Official</span>}
+          {challenge.is_official === 1 ? (
+            <span className="official-badge"> Official</span>
+          ) : (
+            <span style={{ color: '#64748b', fontSize: '0.85em' }}> by {challenge.creator_name || 'Unknown'}</span>
+          )}
         </div>
       ))}
     </div>
   );
-}
 
 // Create Challenge Component
-function CreateChallenge({ token, onBack }) {
+function CreateChallenge({ token, isAdmin, onBack }) {
   const [title, setTitle] = useState('');
   const [code, setCode] = useState('');
   const [correctOutput, setCorrectOutput] = useState('');
@@ -322,10 +325,12 @@ function CreateChallenge({ token, onBack }) {
           <option value={2}>Medium (20 EXP)</option>
           <option value={3}>Hard (30 EXP)</option>
         </select>
-        <label style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', background: '#1a1a2e', borderRadius: '5px', cursor: 'pointer', marginBottom: '10px' }}>
-          <input type="checkbox" checked={isOfficial} onChange={(e) => setIsOfficial(e.target.checked)} style={{ width: '20px', height: '20px', cursor: 'pointer' }} />
-          <span style={{ color: '#00d9ff', fontWeight: 'bold' }}> Official Challenge</span>
-        </label>
+        {isAdmin && (
+  <label style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', background: '#1a1a2e', borderRadius: '5px', cursor: 'pointer', marginBottom: '10px' }}>
+    <input type="checkbox" checked={isOfficial} onChange={(e) => setIsOfficial(e.target.checked)} style={{ width: '20px', height: '20px', cursor: 'pointer' }} />
+    <span style={{ color: '#00d9ff', fontWeight: 'bold' }}> Official Challenge</span>
+  </label>
+)}
         <button type="submit" disabled={submitting} style={{ padding: '14px', borderRadius: '5px', border: 'none', background: '#00d9ff', color: '#1a1a2e', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', marginTop: '10px', opacity: submitting ? 0.7 : 1 }}>
           {submitting ? 'Verifying...' : 'Verify & Create Challenge'}
         </button>
@@ -378,4 +383,4 @@ function Leaderboard() {
   );
 }
 
-export default App;
+export default App;}

@@ -10,10 +10,11 @@ function AdminDashboard({ token, onBack }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+    useEffect(() => {
     fetchDashboardData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
+  
   const fetchDashboardData = async () => {
     setLoading(true);
     setError('');

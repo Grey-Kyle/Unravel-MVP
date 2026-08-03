@@ -12,10 +12,11 @@ function App() {
   const [view, setView] = useState('login');
   const [isAdmin, setIsAdmin] = useState(localStorage.getItem('isAdmin') === 'true');
 
-  useEffect(() => {
+   useEffect(() => {
     if (token) {
       fetchUserStats();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   const fetchUserStats = async () => {
@@ -171,10 +172,10 @@ function Challenges({ token, refreshStats }) {
   const [result, setResult] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
+    useEffect(() => {
     fetchChallenges();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
   const fetchChallenges = async () => {
     try {
       const res = await axios.get(`${API_URL}/api/challenges`, {

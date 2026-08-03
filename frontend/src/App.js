@@ -328,9 +328,9 @@ function CreateChallenge({ token, isAdmin, onBack }) {
             <span style={{ color: '#00d9ff', fontWeight: 'bold' }}> Official Challenge</span>
           </label>
         )}
-        <button type="submit" disabled={submitting} style={{ padding: '14px', borderRadius: '5px', border: 'none', background: '#00d9ff', color: '#1a1a2e', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', marginTop: '10px', opacity: submitting ? 0.7 : 1 }}>
-          {submitting ? 'Verifying...' : 'Verify & Create Challenge'}
-        </button>
+        <button type="submit" disabled={submitting} className="submit-btn">
+  {submitting ? 'Verifying...' : 'Submit Answer →'}
+</button>
       </form>
     </div>
   );

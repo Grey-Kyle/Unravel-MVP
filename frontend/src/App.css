@@ -292,7 +292,35 @@ button {
   margin-bottom: 20px;
   color: #38bdf8;
 }
+.submit-btn {
+  padding: 14px 28px;
+  border: none;
+  border-radius: 8px;
+  background: #00d9ff;
+  color: #1a1a2e;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+  box-shadow: 0 0 15px rgba(0, 217, 255, 0.3);
+  transition: all 0.2s ease;
+}
 
+.submit-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 0 25px rgba(0, 217, 255, 0.6), 0 0 50px rgba(0, 217, 255, 0.2);
+}
+
+.submit-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.submit-btn:disabled {
+  background: #334155;
+  color: #94a3b8;
+  cursor: not-allowed;
+  box-shadow: none;
+}
 .form-group {
   margin-bottom: 20px;
 }

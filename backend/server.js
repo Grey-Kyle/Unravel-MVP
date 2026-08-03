@@ -1,7 +1,6 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const cors = require('cors');
 const db = require('./database');
 const vm = require('vm');
 require('dotenv').config();
@@ -10,12 +9,19 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-key-change-in-production';
 
-// Allow Vercel + local dev
-app.use(cors({
-  origin: ['https://unravel-weld.vercel.app', 'http://localhost:3000'],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+// CORS — manual, bulletproof
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', 'https://unravel-weld.vercel.app');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  
+  next();
+});
+
 app.use(express.json({ limit: '10mb' }));
 
 const authenticateToken = (req, res, next) => {

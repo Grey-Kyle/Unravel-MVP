@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const db = require('./database');
+const { pool, initDb } = require('./database');
 const vm = require('vm');
 require('dotenv').config();
 
@@ -10,7 +10,7 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-key-change-in-production';
 
-// CORS — place this BEFORE any routes or express.json()
+// CORS
 const allowedOrigins = [
   'https://unravel-weld.vercel.app',
   'http://localhost:3000',
@@ -73,17 +73,19 @@ app.post('/api/register', async (req, res) => {
   }
   
   try {
-    const result = db.prepare(
-      "INSERT INTO users (username, password_hash, exp, rank, is_admin) VALUES (?, ?, 0, 'Novice', 0)"
-    ).run(username, hashedPassword);
+    const insertResult = await pool.query(
+      "INSERT INTO users (username, password_hash, exp, rank, is_admin) VALUES ($1, $2, 0, 'Novice', 0) RETURNING id",
+      [username, hashedPassword]
+    );
     
-    const newUserId = result.lastInsertRowid;
-    const row = db.prepare("SELECT COUNT(*) as count FROM users").get();
+    const newUserId = insertResult.rows[0].id;
+    const countResult = await pool.query("SELECT COUNT(*) as count FROM users");
+    const count = parseInt(countResult.rows[0].count);
     
     let isAdmin = false;
-    if (row && row.count === 1) {
+    if (count === 1) {
       isAdmin = true;
-      db.prepare("UPDATE users SET is_admin = 1 WHERE id = ?").run(newUserId);
+      await pool.query("UPDATE users SET is_admin = 1 WHERE id = $1", [newUserId]);
       console.log("First user registered! Promoted to Admin.");
     }
     
@@ -91,7 +93,7 @@ app.post('/api/register', async (req, res) => {
     res.json({ token, userId: newUserId, username, isAdmin });
     
   } catch (err) {
-    if (err.message.includes('UNIQUE constraint failed')) {
+    if (err.code === '23505') {
       return res.status(400).json({ error: 'Username already exists' });
     }
     return res.status(500).json({ error: err.message });
@@ -102,7 +104,8 @@ app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
   
   try {
-    const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+    const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+    const user = result.rows[0];
     if (!user) return res.status(400).json({ error: 'User not found' });
     
     const validPassword = await bcrypt.compare(password, user.password_hash);
@@ -122,23 +125,24 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-app.get('/api/challenges', authenticateToken, (req, res) => {
+app.get('/api/challenges', authenticateToken, async (req, res) => {
   try {
-    const challenges = db.prepare(
+    const result = await pool.query(
       `SELECT c.*, u.username as creator_name 
        FROM challenges c 
        LEFT JOIN users u ON c.created_by = u.id 
        ORDER BY c.exp_value DESC`
-    ).all();
-    res.json(challenges);
+    );
+    res.json(result.rows);
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
 });
 
-app.get('/api/user/stats', authenticateToken, (req, res) => {
+app.get('/api/user/stats', authenticateToken, async (req, res) => {
   try {
-    const user = db.prepare("SELECT exp, rank, is_admin FROM users WHERE id = ?").get(req.user.id);
+    const result = await pool.query("SELECT exp, rank, is_admin FROM users WHERE id = $1", [req.user.id]);
+    const user = result.rows[0];
     if (!user) return res.status(404).json({ error: 'User not found' });
     
     res.json({
@@ -151,7 +155,7 @@ app.get('/api/user/stats', authenticateToken, (req, res) => {
   }
 });
 
-app.post('/api/challenges/:id/submit', authenticateToken, (req, res) => {
+app.post('/api/challenges/:id/submit', authenticateToken, async (req, res) => {
   const challengeId = req.params.id;
   const { user_answer } = req.body;
   const userId = req.user.id;
@@ -161,16 +165,18 @@ app.post('/api/challenges/:id/submit', authenticateToken, (req, res) => {
   }
   
   try {
-    const challenge = db.prepare("SELECT * FROM challenges WHERE id = ?").get(challengeId);
+    const challengeResult = await pool.query("SELECT * FROM challenges WHERE id = $1", [challengeId]);
+    const challenge = challengeResult.rows[0];
     if (!challenge) return res.status(404).json({ error: 'Challenge not found' });
     
     const is_correct = user_answer.trim() === challenge.correct_output.trim() ? 1 : 0;
     
-    const existingAttempt = db.prepare(
-      "SELECT id FROM attempts WHERE user_id = ? AND challenge_id = ? AND is_correct = 1"
-    ).get(userId, challengeId);
+    const existingResult = await pool.query(
+      "SELECT id FROM attempts WHERE user_id = $1 AND challenge_id = $2 AND is_correct = 1",
+      [userId, challengeId]
+    );
     
-    if (existingAttempt && is_correct) {
+    if (existingResult.rows.length > 0 && is_correct) {
       return res.json({ 
         is_correct: true, 
         exp_earned: 0,
@@ -179,12 +185,14 @@ app.post('/api/challenges/:id/submit', authenticateToken, (req, res) => {
       });
     }
     
-    db.prepare(
-      "INSERT INTO attempts (user_id, challenge_id, is_correct) VALUES (?, ?, ?)"
-    ).run(userId, challengeId, is_correct);
+    await pool.query(
+      "INSERT INTO attempts (user_id, challenge_id, is_correct) VALUES ($1, $2, $3)",
+      [userId, challengeId, is_correct]
+    );
     
     if (is_correct) {
-      const user = db.prepare("SELECT exp FROM users WHERE id = ?").get(userId);
+      const userResult = await pool.query("SELECT exp FROM users WHERE id = $1", [userId]);
+      const user = userResult.rows[0];
       const newExp = user.exp + challenge.exp_value;
       let newRank = 'Novice';
       if (newExp >= 1000) newRank = 'Master';
@@ -193,7 +201,7 @@ app.post('/api/challenges/:id/submit', authenticateToken, (req, res) => {
       else if (newExp >= 100) newRank = 'Intermediate';
       else if (newExp >= 50) newRank = 'Learner';
       
-      db.prepare("UPDATE users SET exp = ?, rank = ? WHERE id = ?").run(newExp, newRank, userId);
+      await pool.query("UPDATE users SET exp = $1, rank = $2 WHERE id = $3", [newExp, newRank, userId]);
       
       res.json({ 
         is_correct: true, 
@@ -202,7 +210,7 @@ app.post('/api/challenges/:id/submit', authenticateToken, (req, res) => {
         new_rank: newRank 
       });
     } else {
-      db.prepare("UPDATE challenges SET exp_value = exp_value + 5 WHERE id = ?").run(challengeId);
+      await pool.query("UPDATE challenges SET exp_value = exp_value + 5 WHERE id = $1", [challengeId]);
       res.json({ is_correct: false, message: 'Incorrect. Challenge value increased!' });
     }
   } catch (err) {
@@ -210,7 +218,7 @@ app.post('/api/challenges/:id/submit', authenticateToken, (req, res) => {
   }
 });
 
-app.post('/api/challenges', authenticateToken, (req, res) => {
+app.post('/api/challenges', authenticateToken, async (req, res) => {
   const { title, code, correct_output, difficulty, language, is_official } = req.body;
   const createdBy = req.user.id;
   
@@ -263,35 +271,38 @@ app.post('/api/challenges', authenticateToken, (req, res) => {
   const exp_value = difficulty * 10; 
   
   try {
-    const user = db.prepare("SELECT is_admin FROM users WHERE id = ?").get(createdBy);
+    const adminResult = await pool.query("SELECT is_admin FROM users WHERE id = $1", [createdBy]);
+    const user = adminResult.rows[0];
     const officialFlag = (user && user.is_admin === 1 && is_official) ? 1 : 0;
     
-    const result = db.prepare(
+    const result = await pool.query(
       `INSERT INTO challenges (title, code, correct_output, difficulty, exp_value, language, created_by, is_official) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(title, code, correct_output, difficulty, exp_value, language || 'javascript', createdBy, officialFlag);
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+      [title, code, correct_output, difficulty, exp_value, language || 'javascript', createdBy, officialFlag]
+    );
     
     res.json({ 
       message: 'Challenge created and verified successfully!', 
-      challengeId: result.lastInsertRowid 
+      challengeId: result.rows[0].id 
     });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
 });
 
-app.delete('/api/challenges/:id', authenticateToken, (req, res) => {
+app.delete('/api/challenges/:id', authenticateToken, async (req, res) => {
   const challengeId = req.params.id;
   const userId = req.user.id;
   
   try {
-    const user = db.prepare("SELECT is_admin FROM users WHERE id = ?").get(userId);
+    const adminResult = await pool.query("SELECT is_admin FROM users WHERE id = $1", [userId]);
+    const user = adminResult.rows[0];
     if (!user || user.is_admin !== 1) {
       return res.status(403).json({ error: 'Only admins can delete challenges' });
     }
     
-    const result = db.prepare("DELETE FROM challenges WHERE id = ?").run(challengeId);
-    if (result.changes === 0) return res.status(404).json({ error: 'Challenge not found' });
+    const result = await pool.query("DELETE FROM challenges WHERE id = $1", [challengeId]);
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Challenge not found' });
     
     res.json({ message: 'Challenge deleted successfully' });
   } catch (err) {
@@ -299,42 +310,47 @@ app.delete('/api/challenges/:id', authenticateToken, (req, res) => {
   }
 });
 
-app.get('/api/leaderboard', (req, res) => {
+app.get('/api/leaderboard', async (req, res) => {
   try {
-    const users = db.prepare(
+    const result = await pool.query(
       "SELECT username, exp, rank FROM users ORDER BY exp DESC LIMIT 10"
-    ).all();
-    res.json(users);
+    );
+    res.json(result.rows);
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
 });
 
-app.get('/api/user/profile', authenticateToken, (req, res) => {
+app.get('/api/user/profile', authenticateToken, async (req, res) => {
   const userId = req.user.id;
   
   try {
-    const user = db.prepare("SELECT username, exp, rank FROM users WHERE id = ?").get(userId);
+    const userResult = await pool.query("SELECT username, exp, rank FROM users WHERE id = $1", [userId]);
+    const user = userResult.rows[0];
     if (!user) return res.status(404).json({ error: 'User not found' });
     
-    const createdRow = db.prepare("SELECT COUNT(*) as created FROM challenges WHERE created_by = ?").get(userId);
-    const solvedRow = db.prepare("SELECT COUNT(DISTINCT challenge_id) as solved FROM attempts WHERE user_id = ? AND is_correct = 1").get(userId);
-    const rankRow = db.prepare("SELECT COUNT(*) + 1 as leaderboardRank FROM users WHERE exp > ?").get(user.exp);
+    const createdResult = await pool.query("SELECT COUNT(*) as created FROM challenges WHERE created_by = $1", [userId]);
+    const solvedResult = await pool.query("SELECT COUNT(DISTINCT challenge_id) as solved FROM attempts WHERE user_id = $1 AND is_correct = 1", [userId]);
+    const rankResult = await pool.query("SELECT COUNT(*) + 1 as leaderboardRank FROM users WHERE exp > $1", [user.exp]);
     
     res.json({
       username: user.username,
       exp: user.exp,
       rank: user.rank,
-      leaderboardRank: rankRow.leaderboardRank,
-      challengesCreated: createdRow.created,
-      challengesSolved: solvedRow.solved
+      leaderboardRank: parseInt(rankResult.rows[0].leaderboardrank),
+      challengesCreated: parseInt(createdResult.rows[0].created),
+      challengesSolved: parseInt(solvedResult.rows[0].solved)
     });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
 });
 
-// NO frontend serving — Vercel handles that now
-app.listen(PORT, () => {
-  console.log(`Unravel MVP server running on port ${PORT}`);
-});
+const startServer = async () => {
+  await initDb();
+  app.listen(PORT, () => {
+    console.log(`Unravel MVP server running on port ${PORT}`);
+  });
+};
+
+startServer();

@@ -4,7 +4,7 @@ import AdminDashboard from './AdminDashboard';
 import Profile from './Profile';
 import './App.css';
 
-const API_URL = 'https://Unravel.onrender.com';
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem('token'));

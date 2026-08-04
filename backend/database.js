@@ -1,11 +1,11 @@
-const Database = require('better-sqlite3');
+const { DatabaseSync } = require('node:sqlite');
 const path = require('path');
 
 const dbPath = process.env.NODE_ENV === 'production' 
   ? '/tmp/unravel.db'
   : path.resolve(__dirname, 'unravel.db');
 
-const db = new Database(dbPath);
+const db = new DatabaseSync(dbPath);
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (

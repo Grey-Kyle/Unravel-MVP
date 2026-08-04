@@ -301,6 +301,9 @@ app.delete('/api/challenges/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Only admins can delete challenges' });
     }
     
+    // FIXED: Delete attempts first, then delete challenge
+    await pool.query("DELETE FROM attempts WHERE challenge_id = $1", [challengeId]);
+    
     const result = await pool.query("DELETE FROM challenges WHERE id = $1", [challengeId]);
     if (result.rowCount === 0) return res.status(404).json({ error: 'Challenge not found' });
     

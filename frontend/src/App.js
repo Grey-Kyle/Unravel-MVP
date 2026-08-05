@@ -11,6 +11,7 @@ function App() {
   const [user, setUser] = useState(null);
   const [view, setView] = useState('login');
   const [isAdmin, setIsAdmin] = useState(localStorage.getItem('isAdmin') === 'true');
+  const [challengesKey, setChallengesKey] = useState(0);
 
   useEffect(() => {
     if (token) {
@@ -82,8 +83,8 @@ function App() {
         {!token && view === 'register' && (
           <Register setToken={setToken} setIsAdmin={setIsAdmin} setView={setView} />
         )}
-        {token && view === 'challenges' && <Challenges token={token} refreshStats={fetchUserStats} />}
-        {token && view === 'create' && <CreateChallenge token={token} isAdmin={isAdmin} onBack={() => setView('challenges')} />}
+        {token && view === 'challenges' && <Challenges key={challengesKey} token={token} refreshStats={fetchUserStats} />}
+        {token && view === 'create' && <CreateChallenge token={token} isAdmin={isAdmin} onBack={() => setView('challenges')} onCreated={() => setChallengesKey(k => k + 1)} />}
         {token && view === 'leaderboard' && <Leaderboard />}
         {token && view === 'profile' && <Profile token={token} />}
         {token && view === 'admin' && isAdmin && <AdminDashboard token={token} onBack={() => setView('challenges')} />}
@@ -260,7 +261,7 @@ function Challenges({ token, refreshStats }) {
   );
 }
 
-function CreateChallenge({ token, isAdmin, onBack }) {
+function CreateChallenge({ token, isAdmin, onBack, onCreated }) {
   const [title, setTitle] = useState('');
   const [code, setCode] = useState('');
   const [correctOutput, setCorrectOutput] = useState('');
@@ -299,6 +300,7 @@ function CreateChallenge({ token, isAdmin, onBack }) {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       setSuccess('Challenge created and verified successfully!');
+      if (onCreated) onCreated();
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to create challenge');
       setDetails(err.response?.data?.details || '');

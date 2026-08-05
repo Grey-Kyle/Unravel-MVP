@@ -242,8 +242,21 @@ app.post('/api/challenges', authenticateToken, async (req, res) => {
     info: makeConsoleMethod()
   };
 
+ 
+    // Stage 1: Compile — catches syntax errors
+  let script;
   try {
-    const script = new vm.Script(code);
+    script = new vm.Script(code);
+  } catch (err) {
+    return res.status(400).json({ 
+      error: 'Syntax Error',
+      details: err.message,
+      type: 'syntax'
+    });
+  }
+
+  // Stage 2: Execute — catches runtime errors
+  try {
     const context = vm.createContext({ 
       console: mockConsole,
       Math, Date, Array, Object, String, Number, Boolean, JSON, 
@@ -259,12 +272,19 @@ app.post('/api/challenges', authenticateToken, async (req, res) => {
     
     script.runInContext(context, { timeout: 2000 }); 
   } catch (err) {
-    return res.status(400).json({ error: 'Code execution failed or timed out: ' + err.message });
+    return res.status(400).json({ 
+      error: 'Runtime Error',
+      details: err.message,
+      type: 'runtime'
+    });
   }
 
+  // Stage 3: Verify output
   if (output.trim() !== correct_output.trim()) {
     return res.status(400).json({ 
-      error: `Verification failed! Your code outputs:\n"${output.trim()}"\nbut you provided:\n"${correct_output}"` 
+      error: 'Output Mismatch',
+      details: `Your code produced:\n"${output.trim()}"\n\nBut expected:\n"${correct_output}"`,
+      type: 'mismatch'
     });
   }
   

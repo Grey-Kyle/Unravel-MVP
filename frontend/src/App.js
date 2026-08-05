@@ -12,7 +12,7 @@ function App() {
   const [view, setView] = useState('login');
   const [isAdmin, setIsAdmin] = useState(localStorage.getItem('isAdmin') === 'true');
 
-   useEffect(() => {
+  useEffect(() => {
     if (token) {
       fetchUserStats();
     }
@@ -172,10 +172,11 @@ function Challenges({ token, refreshStats }) {
   const [result, setResult] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
-    useEffect(() => {
+  useEffect(() => {
     fetchChallenges();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
   const fetchChallenges = async () => {
     try {
       const res = await axios.get(`${API_URL}/api/challenges`, {
@@ -222,15 +223,15 @@ function Challenges({ token, refreshStats }) {
         <pre className="code-block">{selectedChallenge.code}</pre>
         <form onSubmit={handleSubmit}>
           <textarea
-  className="answer-textarea"
-  value={userOutput}
-  onChange={(e) => setUserOutput(e.target.value)}
-  placeholder="Enter your output..."
-  required
-/>
-<button type="submit" disabled={submitting} className="answer-submit-btn">
-  {submitting ? 'Verifying...' : 'Submit Answer →'}
-</button>
+            className="answer-textarea"
+            value={userOutput}
+            onChange={(e) => setUserOutput(e.target.value)}
+            placeholder="Enter your output..."
+            required
+          />
+          <button type="submit" disabled={submitting} className="answer-submit-btn">
+            {submitting ? 'Verifying...' : 'Submit Answer →'}
+          </button>
         </form>
         {result && (
           <div className={`result ${result.is_correct ? 'correct' : 'incorrect'}`}>
@@ -266,6 +267,7 @@ function CreateChallenge({ token, isAdmin, onBack }) {
   const [difficulty, setDifficulty] = useState(1);
   const [isOfficial, setIsOfficial] = useState(false);
   const [error, setError] = useState('');
+  const [details, setDetails] = useState('');
   const [success, setSuccess] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -280,6 +282,7 @@ function CreateChallenge({ token, isAdmin, onBack }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setDetails('');
     setSuccess('');
     setSubmitting(true);
     try {
@@ -298,6 +301,7 @@ function CreateChallenge({ token, isAdmin, onBack }) {
       setSuccess('Challenge created and verified successfully!');
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to create challenge');
+      setDetails(err.response?.data?.details || '');
     } finally {
       setSubmitting(false);
     }
@@ -312,7 +316,12 @@ function CreateChallenge({ token, isAdmin, onBack }) {
         Create New Challenge
       </h2>
 
-      {error && <div className="message error">{error}</div>}
+      {error && (
+        <div className="message error">
+          <strong>{error}</strong>
+          {details && <pre style={{ marginTop: '8px', whiteSpace: 'pre-wrap', fontSize: '13px', color: '#f87171', background: '#1a1a2e', padding: '10px', borderRadius: '5px' }}>{details}</pre>}
+        </div>
+      )}
       {success && <div className="message success">{success}</div>}
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
@@ -330,9 +339,9 @@ function CreateChallenge({ token, isAdmin, onBack }) {
             <span style={{ color: '#00d9ff', fontWeight: 'bold' }}> Official Challenge</span>
           </label>
         )}
-        <button type="submit" disabled={submitting} className="submit-btn">
-  {submitting ? 'Verifying...' : 'Submit Answer →'}
-</button>
+        <button type="submit" disabled={submitting} className="create-submit-btn">
+          {submitting ? 'Verifying...' : 'Verify & Create Challenge'}
+        </button>
       </form>
     </div>
   );
@@ -343,6 +352,7 @@ function Leaderboard() {
 
   useEffect(() => {
     fetchLeaderboard();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchLeaderboard = async () => {

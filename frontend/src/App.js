@@ -195,6 +195,19 @@ function Challenges({ token, refreshStats }) {
     setResult(null);
   };
 
+  const handleNextChallenge = () => {
+    if (!challenges.length || !selectedChallenge) return;
+    const currentIndex = challenges.findIndex(c => c.id === selectedChallenge.id);
+    const nextIndex = currentIndex + 1;
+    
+    if (nextIndex < challenges.length) {
+      handleSelectChallenge(challenges[nextIndex]);
+    } else {
+      setSelectedChallenge(null);
+      setResult(null);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!selectedChallenge) return;
@@ -234,10 +247,43 @@ function Challenges({ token, refreshStats }) {
             {submitting ? 'Verifying...' : 'Submit Answer →'}
           </button>
         </form>
+        
         {result && (
-          <div className={`result ${result.is_correct ? 'correct' : 'incorrect'}`}>
-            {result.is_correct ? `✓ Correct! +${result.exp_earned} EXP` : `✗ ${result.message}`}
-          </div>
+          <>
+            <div className={`result ${result.is_correct ? 'correct' : 'incorrect'}`}>
+              {result.is_correct ? `✓ Correct! +${result.exp_earned} EXP` : `✗ ${result.message}`}
+            </div>
+            
+            <div style={{ marginTop: '20px', display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
+              <button 
+                onClick={handleNextChallenge}
+                className="answer-submit-btn"
+                style={{ flex: 1, minWidth: '150px' }}
+              >
+                Next Challenge →
+              </button>
+              <button 
+                onClick={() => { setSelectedChallenge(null); setResult(null); }}
+                style={{ 
+                  flex: 1, 
+                  minWidth: '150px',
+                  padding: '14px',
+                  borderRadius: '8px',
+                  border: '1px solid #64748b',
+                  background: 'transparent',
+                  color: '#94a3b8',
+                  fontSize: '16px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => { e.target.style.borderColor = '#00d9ff'; e.target.style.color = '#00d9ff'; }}
+                onMouseLeave={(e) => { e.target.style.borderColor = '#64748b'; e.target.style.color = '#94a3b8'; }}
+              >
+                ← Back to List
+              </button>
+            </div>
+          </>
         )}
       </div>
     );

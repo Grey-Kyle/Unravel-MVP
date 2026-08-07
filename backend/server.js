@@ -242,8 +242,10 @@ app.post('/api/challenges', authenticateToken, async (req, res) => {
     info: makeConsoleMethod()
   };
 
- 
-    // Stage 1: Compile — catches syntax errors
+  const timeouts = new Set();
+  const intervals = new Set();
+
+  // Stage 1: Compile — catches syntax errors
   let script;
   try {
     script = new vm.Script(code);
@@ -267,10 +269,39 @@ app.post('/api/challenges', authenticateToken, async (req, res) => {
       BigInt, Intl, Buffer, ArrayBuffer, DataView, 
       Float32Array, Float64Array, Int8Array, Int16Array, Int32Array,
       Uint8Array, Uint16Array, Uint32Array, Uint8ClampedArray,
-      SharedArrayBuffer, Atomics, Proxy, Reflect
+      SharedArrayBuffer, Atomics, Proxy, Reflect,
+      setTimeout: (fn, ms = 0, ...args) => {
+        const t = setTimeout(() => {
+          timeouts.delete(t);
+          fn(...args);
+        }, ms);
+        timeouts.add(t);
+        return t;
+      },
+      clearTimeout: (t) => {
+        timeouts.delete(t);
+        clearTimeout(t);
+      },
+      setInterval: (fn, ms = 0, ...args) => {
+        const t = setInterval(fn, ms, ...args);
+        intervals.add(t);
+        return t;
+      },
+      clearInterval: (t) => {
+        intervals.delete(t);
+        clearInterval(t);
+      }
     });
     
-    script.runInContext(context, { timeout: 2000 }); 
+    script.runInContext(context, { timeout: 2000 });
+    
+    // Flush microtasks and 0ms timers so async code completes
+    await new Promise(r => setTimeout(r, 100));
+    
+    // Clean up any lingering intervals
+    intervals.forEach(clearInterval);
+    timeouts.forEach(clearTimeout);
+    
   } catch (err) {
     return res.status(400).json({ 
       error: 'Runtime Error',
@@ -321,7 +352,6 @@ app.delete('/api/challenges/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Only admins can delete challenges' });
     }
     
-    // FIXED: Delete attempts first, then delete challenge
     await pool.query("DELETE FROM attempts WHERE challenge_id = $1", [challengeId]);
     
     const result = await pool.query("DELETE FROM challenges WHERE id = $1", [challengeId]);

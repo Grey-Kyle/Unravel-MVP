@@ -272,7 +272,6 @@ function Challenges({ token, refreshStats }) {
                   minWidth: '150px',
                   padding: '14px',
                   borderRadius: '8px',
-                  border: 'none',
                   background: '#1a1a2e',
                   color: '#00d9ff',
                   fontSize: '16px',

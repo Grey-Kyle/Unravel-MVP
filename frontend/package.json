@@ -16,7 +16,7 @@
   },
   "scripts": {
     "start": "react-scripts start --host 0.0.0.0",
-    "build": "GENERATE_SOURCEMAP=false react-scripts build && npx javascript-obfuscator build/static/js/*.js --output build/static/js/ --compact true --control-flow-flattening true --dead-code-injection true --identifier-names-generator hexadecimal --rename-globals true --rotate-string-array true",
+    "build": "GENERATE_SOURCEMAP=false react-scripts build && npx javascript-obfuscator build/static/js/*.js --output build/static/js/ --compact true --control-flow-flattening true --dead-code-injection true --identifier-names-generator hexadecimal --rename-globals true --string-array true --string-array-encoding base64",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },

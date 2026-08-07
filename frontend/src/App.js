@@ -189,34 +189,35 @@ function Challenges({ token, refreshStats }) {
     }
   };
 
-  const handleSelectChallenge = (index) => {
+  const goToChallenge = (index) => {
     setCurrentIndex(index);
     setUserOutput('');
     setResult(null);
   };
 
-  const handleBack = () => {
+  const goBack = () => {
     setCurrentIndex(-1);
     setUserOutput('');
     setResult(null);
   };
 
-  const handleNext = () => {
-    if (currentIndex + 1 < challenges.length) {
-      setCurrentIndex(currentIndex + 1);
-      setUserOutput('');
-      setResult(null);
+  const goNext = () => {
+    const next = currentIndex + 1;
+    if (next < challenges.length) {
+      goToChallenge(next);
     } else {
-      handleBack();
+      goBack();
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (currentIndex === -1) return;
+    if (currentIndex === -1 || !challenges[currentIndex]) return;
+    
     const challenge = challenges[currentIndex];
     setSubmitting(true);
     setResult(null);
+    
     try {
       const res = await axios.post(
         `${API_URL}/api/challenges/${challenge.id}/submit`,
@@ -232,16 +233,18 @@ function Challenges({ token, refreshStats }) {
     }
   };
 
+  // Detail view
   if (currentIndex !== -1 && challenges[currentIndex]) {
     const challenge = challenges[currentIndex];
-    const isLast = currentIndex === challenges.length - 1;
+    const hasNext = currentIndex + 1 < challenges.length;
 
     return (
       <div className="challenge-detail">
-        <button onClick={handleBack}>← Back</button>
+        <button onClick={goBack}>← Back</button>
         <h2>{challenge.title}</h2>
         <p>Difficulty: {challenge.difficulty} | EXP: {challenge.exp_value}</p>
         <pre className="code-block">{challenge.code}</pre>
+        
         <form onSubmit={handleSubmit}>
           <textarea
             className="answer-textarea"
@@ -263,14 +266,26 @@ function Challenges({ token, refreshStats }) {
 
             <div style={{ marginTop: '20px', display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
               <button 
-                onClick={handleNext}
-                className="answer-submit-btn"
-                style={{ flex: 1, minWidth: '150px' }}
+                onClick={goNext}
+                style={{ 
+                  flex: 1, 
+                  minWidth: '150px',
+                  padding: '14px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: '#1a1a2e',
+                  color: '#00d9ff',
+                  fontSize: '16px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  border: '1px solid #00d9ff'
+                }}
               >
-                {isLast ? 'Back to List →' : 'Next Challenge →'}
+                {hasNext ? 'Next Challenge →' : 'Back to List →'}
               </button>
+              
               <button 
-                onClick={handleBack}
+                onClick={goBack}
                 style={{ 
                   flex: 1, 
                   minWidth: '150px',
@@ -293,11 +308,12 @@ function Challenges({ token, refreshStats }) {
     );
   }
 
+  // List view
   return (
     <div className="challenges-list">
       <h2>Challenges</h2>
       {challenges.map((challenge, index) => (
-        <div key={challenge.id} className="challenge-card" onClick={() => handleSelectChallenge(index)}>
+        <div key={challenge.id} className="challenge-card" onClick={() => goToChallenge(index)}>
           <h3>{challenge.title}</h3>
           <p>Difficulty: {challenge.difficulty} | EXP: {challenge.exp_value}</p>
           {challenge.is_official === 1 ? (

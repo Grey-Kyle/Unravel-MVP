@@ -168,7 +168,7 @@ function Register({ setToken, setIsAdmin, setView }) {
 
 function Challenges({ token, refreshStats }) {
   const [challenges, setChallenges] = useState([]);
-  const [selectedChallenge, setSelectedChallenge] = useState(null);
+  const [currentIndex, setCurrentIndex] = useState(-1);
   const [userOutput, setUserOutput] = useState('');
   const [result, setResult] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -189,33 +189,37 @@ function Challenges({ token, refreshStats }) {
     }
   };
 
-  const handleSelectChallenge = (challenge) => {
-    setSelectedChallenge(challenge);
+  const handleSelectChallenge = (index) => {
+    setCurrentIndex(index);
     setUserOutput('');
     setResult(null);
   };
 
-  const handleNextChallenge = () => {
-    if (!challenges.length || !selectedChallenge) return;
-    const currentIndex = challenges.findIndex(c => c.id === selectedChallenge.id);
-    const nextIndex = currentIndex + 1;
-    
-    if (nextIndex < challenges.length) {
-      handleSelectChallenge(challenges[nextIndex]);
-    } else {
-      setSelectedChallenge(null);
+  const handleBack = () => {
+    setCurrentIndex(-1);
+    setUserOutput('');
+    setResult(null);
+  };
+
+  const handleNext = () => {
+    if (currentIndex + 1 < challenges.length) {
+      setCurrentIndex(currentIndex + 1);
+      setUserOutput('');
       setResult(null);
+    } else {
+      handleBack();
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!selectedChallenge) return;
+    if (currentIndex === -1) return;
+    const challenge = challenges[currentIndex];
     setSubmitting(true);
     setResult(null);
     try {
       const res = await axios.post(
-        `${API_URL}/api/challenges/${selectedChallenge.id}/submit`,
+        `${API_URL}/api/challenges/${challenge.id}/submit`,
         { user_answer: userOutput },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -228,13 +232,16 @@ function Challenges({ token, refreshStats }) {
     }
   };
 
-  if (selectedChallenge) {
+  if (currentIndex !== -1 && challenges[currentIndex]) {
+    const challenge = challenges[currentIndex];
+    const isLast = currentIndex === challenges.length - 1;
+
     return (
       <div className="challenge-detail">
-        <button onClick={() => { setSelectedChallenge(null); setResult(null); }}>← Back</button>
-        <h2>{selectedChallenge.title}</h2>
-        <p>Difficulty: {selectedChallenge.difficulty} | EXP: {selectedChallenge.exp_value}</p>
-        <pre className="code-block">{selectedChallenge.code}</pre>
+        <button onClick={handleBack}>← Back</button>
+        <h2>{challenge.title}</h2>
+        <p>Difficulty: {challenge.difficulty} | EXP: {challenge.exp_value}</p>
+        <pre className="code-block">{challenge.code}</pre>
         <form onSubmit={handleSubmit}>
           <textarea
             className="answer-textarea"
@@ -247,23 +254,23 @@ function Challenges({ token, refreshStats }) {
             {submitting ? 'Verifying...' : 'Submit Answer →'}
           </button>
         </form>
-        
+
         {result && (
           <>
             <div className={`result ${result.is_correct ? 'correct' : 'incorrect'}`}>
               {result.is_correct ? `✓ Correct! +${result.exp_earned} EXP` : `✗ ${result.message}`}
             </div>
-            
+
             <div style={{ marginTop: '20px', display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
               <button 
-                onClick={handleNextChallenge}
+                onClick={handleNext}
                 className="answer-submit-btn"
                 style={{ flex: 1, minWidth: '150px' }}
               >
-                Next Challenge →
+                {isLast ? 'Back to List →' : 'Next Challenge →'}
               </button>
               <button 
-                onClick={() => { setSelectedChallenge(null); setResult(null); }}
+                onClick={handleBack}
                 style={{ 
                   flex: 1, 
                   minWidth: '150px',
@@ -274,11 +281,8 @@ function Challenges({ token, refreshStats }) {
                   color: '#94a3b8',
                   fontSize: '16px',
                   fontWeight: 'bold',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease'
+                  cursor: 'pointer'
                 }}
-                onMouseEnter={(e) => { e.target.style.borderColor = '#00d9ff'; e.target.style.color = '#00d9ff'; }}
-                onMouseLeave={(e) => { e.target.style.borderColor = '#64748b'; e.target.style.color = '#94a3b8'; }}
               >
                 ← Back to List
               </button>
@@ -292,8 +296,8 @@ function Challenges({ token, refreshStats }) {
   return (
     <div className="challenges-list">
       <h2>Challenges</h2>
-      {challenges.map(challenge => (
-        <div key={challenge.id} className="challenge-card" onClick={() => handleSelectChallenge(challenge)}>
+      {challenges.map((challenge, index) => (
+        <div key={challenge.id} className="challenge-card" onClick={() => handleSelectChallenge(index)}>
           <h3>{challenge.title}</h3>
           <p>Difficulty: {challenge.difficulty} | EXP: {challenge.exp_value}</p>
           {challenge.is_official === 1 ? (

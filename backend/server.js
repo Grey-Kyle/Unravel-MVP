@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const rateLimit = require('express-rate-limit');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { pool, initDb } = require('./database');
@@ -8,42 +9,48 @@ require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-key-change-in-production';
 
-// CORS
+// SECURITY: Enforce JWT_SECRET from env — no hardcoded fallback
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.error('FATAL: JWT_SECRET environment variable is required');
+  process.exit(1);
+}
+
+// Rate limiting
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later' }
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: 'Too many login attempts, please try again later' }
+});
+
+app.use(generalLimiter);
+
+// CORS — locked to exact domains only
 const allowedOrigins = [
   'https://unravel-weld.vercel.app',
   'http://localhost:3000',
   'http://127.0.0.1:3000'
 ];
 
-const isAllowedOrigin = (origin) => {
-  if (!origin) return true;
-  return allowedOrigins.includes(origin) || origin.endsWith('.vercel.app');
-};
-
 app.use(cors({
-  origin: (origin, callback) => {
-    if (isAllowedOrigin(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('CORS origin not allowed'));
-    }
-  },
+  origin: allowedOrigins,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
   optionsSuccessStatus: 204
 }));
 
-app.use((req, res, next) => {
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(204);
-  }
-  next();
-});
-
-app.use(express.json({ limit: '10mb' }));
+// Reduce body limit — 10MB was excessive
+app.use(express.json({ limit: '1mb' }));
 
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
@@ -52,17 +59,25 @@ const authenticateToken = (req, res, next) => {
   if (!token) return res.status(401).json({ error: 'Access denied' });
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) return res.status(403).json({ error: 'Invalid token' });
+    if (err) return res.status(403).json({ error: 'Invalid or expired token' });
     req.user = user;
     next();
   });
 };
 
-app.post('/api/register', async (req, res) => {
+app.post('/api/register', authLimiter, async (req, res) => {
   const { username, password } = req.body;
   
   if (!username || !password) {
     return res.status(400).json({ error: 'Username and password required' });
+  }
+
+  if (username.length < 3 || username.length > 30) {
+    return res.status(400).json({ error: 'Username must be 3-30 characters' });
+  }
+
+  if (password.length < 6) {
+    return res.status(400).json({ error: 'Password must be at least 6 characters' });
   }
 
   let hashedPassword;
@@ -89,7 +104,8 @@ app.post('/api/register', async (req, res) => {
       console.log("First user registered! Promoted to Admin.");
     }
     
-    const token = jwt.sign({ id: newUserId, username }, JWT_SECRET);
+    // SECURITY: Token expires in 7 days
+    const token = jwt.sign({ id: newUserId, username }, JWT_SECRET, { expiresIn: '7d' });
     res.json({ token, userId: newUserId, username, isAdmin });
     
   } catch (err) {
@@ -100,7 +116,7 @@ app.post('/api/register', async (req, res) => {
   }
 });
 
-app.post('/api/login', async (req, res) => {
+app.post('/api/login', authLimiter, async (req, res) => {
   const { username, password } = req.body;
   
   try {
@@ -111,7 +127,8 @@ app.post('/api/login', async (req, res) => {
     const validPassword = await bcrypt.compare(password, user.password_hash);
     if (!validPassword) return res.status(400).json({ error: 'Invalid password' });
     
-    const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET);
+    // SECURITY: Token expires in 7 days
+    const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '7d' });
     res.json({ 
       token, 
       userId: user.id, 
@@ -266,10 +283,11 @@ app.post('/api/challenges', authenticateToken, async (req, res) => {
       encodeURI, decodeURI, encodeURIComponent, decodeURIComponent,
       undefined, Infinity, NaN,
       Set, Map, WeakSet, WeakMap, Promise, RegExp, Error, Symbol,
-      BigInt, Intl, Buffer, ArrayBuffer, DataView, 
+      BigInt, Intl,
       Float32Array, Float64Array, Int8Array, Int16Array, Int32Array,
       Uint8Array, Uint16Array, Uint32Array, Uint8ClampedArray,
-      SharedArrayBuffer, Atomics, Proxy, Reflect,
+      DataView,
+      // SECURITY: Removed escape vectors: Buffer, ArrayBuffer, SharedArrayBuffer, Atomics, Proxy, Reflect
       setTimeout: (fn, ms = 0, ...args) => {
         const t = setTimeout(() => {
           timeouts.delete(t);

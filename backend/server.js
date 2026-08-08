@@ -417,6 +417,113 @@ app.get('/api/user/profile', authenticateToken, async (req, res) => {
   }
 });
 
+// ─── SPRINT MODE ───
+const SPRINT_POOL = [
+  { id: 1, code: 'console.log("hello");', runs: true },
+  { id: 2, code: 'console.log(x);', runs: false },
+  { id: 3, code: 'let a = 5;\nconsole.log(a);', runs: true },
+  { id: 4, code: 'for (let i = 0; i < 3; i++\n  console.log(i);', runs: false },
+  { id: 5, code: 'console.log(10 / 0);', runs: true },
+  { id: 6, code: 'function foo() {\n  console.log(bar);\n}\nfoo();', runs: false },
+  { id: 7, code: 'const arr = [1, 2, 3];\nconsole.log(arr[1]);', runs: true },
+  { id: 8, code: 'console.log("missing quote);', runs: false },
+  { id: 9, code: 'let x = 1;\nlet y = 2;\nconsole.log(x + y);', runs: true },
+  { id: 10, code: 'const obj = {a: 1;\nconsole.log(obj);', runs: false },
+  { id: 11, code: 'console.log(typeof "hi");', runs: true },
+  { id: 12, code: 'let a = [1,2,3);\nconsole.log(a);', runs: false },
+  { id: 13, code: 'console.log(2 ** 3);', runs: true },
+  { id: 14, code: 'if (true {\n  console.log("yes");\n}', runs: false },
+  { id: 15, code: 'console.log(Math.max(5, 10));', runs: true }
+];
+
+const TARGET_CORRECT = 10;
+const PENALTY_MS = 2000;
+
+app.get('/api/sprint', authenticateToken, (req, res) => {
+  const shuffled = [...SPRINT_POOL].sort(() => 0.5 - Math.random());
+  res.json({ 
+    challenges: shuffled.map(c => ({ id: c.id, code: c.code, runs: c.runs })),
+    target: TARGET_CORRECT,
+    penaltyMs: PENALTY_MS
+  });
+});
+
+app.post('/api/sprint/submit', authenticateToken, async (req, res) => {
+  const { answers, rawTimeMs } = req.body;
+  
+  let correctCount = 0;
+  let wrongCount = 0;
+  
+  for (const a of answers) {
+    const challenge = SPRINT_POOL.find(c => c.id === a.id);
+    if (!challenge) continue;
+    
+    if (challenge.runs === a.guess) {
+      correctCount++;
+    } else {
+      wrongCount++;
+    }
+    
+    if (correctCount >= TARGET_CORRECT) break;
+  }
+  
+  if (correctCount < TARGET_CORRECT) {
+    return res.status(400).json({ error: 'Sprint incomplete — 10 correct required' });
+  }
+  
+  const penalizedTime = rawTimeMs + (wrongCount * PENALTY_MS);
+  
+  const userResult = await pool.query(
+    "SELECT sprint_best_time, sprint_wrong_count FROM users WHERE id = $1", 
+    [req.user.id]
+  );
+  const currentBest = userResult.rows[0]?.sprint_best_time;
+  const currentWrongs = userResult.rows[0]?.sprint_wrong_count || 0;
+  
+  let newBest = false;
+  if (!currentBest || 
+      penalizedTime < currentBest || 
+      (penalizedTime === currentBest && wrongCount < currentWrongs)) {
+    
+    await pool.query(
+      "UPDATE users SET sprint_best_time = $1, sprint_wrong_count = $2 WHERE id = $3",
+      [penalizedTime, wrongCount, req.user.id]
+    );
+    newBest = true;
+  }
+  
+  res.json({
+    correctCount,
+    wrongCount,
+    rawTimeMs,
+    penaltyTotal: wrongCount * PENALTY_MS,
+    penalizedTime,
+    newBest
+  });
+});
+
+app.get('/api/sprint/leaderboard', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT username, sprint_best_time as final_time_ms, sprint_wrong_count as wrongs
+       FROM users 
+       WHERE sprint_best_time IS NOT NULL 
+       ORDER BY sprint_best_time ASC, sprint_wrong_count ASC
+       LIMIT 10`
+    );
+    
+    const formatted = result.rows.map(r => ({
+      username: r.username,
+      finalTime: (r.final_time_ms / 1000).toFixed(2) + 's',
+      wrongs: r.wrongs
+    }));
+    
+    res.json(formatted);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 const startServer = async () => {
   await initDb();
   app.listen(PORT, () => {

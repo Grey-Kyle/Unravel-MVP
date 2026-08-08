@@ -18,6 +18,17 @@ const initDb = async () => {
       )
     `);
 
+    // Add sprint columns if they don't exist
+    await pool.query(`
+      ALTER TABLE users 
+      ADD COLUMN IF NOT EXISTS sprint_best_time INTEGER DEFAULT NULL
+    `);
+    
+    await pool.query(`
+      ALTER TABLE users 
+      ADD COLUMN IF NOT EXISTS sprint_wrong_count INTEGER DEFAULT 0
+    `);
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS challenges (
         id SERIAL PRIMARY KEY,

@@ -63,6 +63,7 @@ function App() {
       <nav className="nav">
         {token && (
           <>
+            <button onClick={() => setView('sprint')}>Sprint</button>
             <button onClick={() => setView('challenges')}>Challenges</button>
             <button onClick={() => setView('create')}>Create Challenge</button>
             <button onClick={() => setView('leaderboard')}>Leaderboard</button>
@@ -83,6 +84,7 @@ function App() {
         {!token && view === 'register' && (
           <Register setToken={setToken} setIsAdmin={setIsAdmin} setView={setView} />
         )}
+        {token && view === 'sprint' && <Sprint token={token} />}
         {token && view === 'challenges' && <Challenges key={challengesKey} token={token} refreshStats={fetchUserStats} />}
         {token && view === 'create' && <CreateChallenge token={token} isAdmin={isAdmin} onBack={() => setView('challenges')} onCreated={() => setChallengesKey(k => k + 1)} />}
         {token && view === 'leaderboard' && <Leaderboard />}
@@ -166,6 +168,372 @@ function Register({ setToken, setIsAdmin, setView }) {
   );
 }
 
+function Sprint({ token }) {
+  const [phase, setPhase] = useState('start');
+  const [pool, setPool] = useState([]);
+  const [index, setIndex] = useState(0);
+  const [correct, setCorrect] = useState(0);
+  const [wrong, setWrong] = useState(0);
+  const [answers, setAnswers] = useState([]);
+  const [startTime, setStartTime] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
+  const [result, setResult] = useState(null);
+  const [board, setBoard] = useState([]);
+
+  useEffect(() => {
+    let interval;
+    if (phase === 'playing') {
+      interval = setInterval(() => setElapsed(Date.now() - startTime), 100);
+    }
+    return () => clearInterval(interval);
+  }, [phase, startTime]);
+
+  const start = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/api/sprint`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setPool(res.data.challenges);
+      setIndex(0);
+      setCorrect(0);
+      setWrong(0);
+      setAnswers([]);
+      setElapsed(0);
+      setStartTime(Date.now());
+      setPhase('playing');
+    } catch (err) {
+      alert('Failed to load sprint');
+    }
+  };
+
+  const guess = (runs) => {
+    const current = pool[index];
+    const isCorrect = current.runs === runs;
+    const nextAnswers = [...answers, { id: current.id, guess: runs }];
+
+    let nextCorrect = correct;
+    let nextWrong = wrong;
+    let nextIndex = index + 1;
+
+    if (isCorrect) {
+      nextCorrect = correct + 1;
+    } else {
+      nextWrong = wrong + 1;
+    }
+
+    if (nextCorrect >= 10) {
+      finish(nextAnswers, nextWrong);
+      return;
+    }
+
+    if (nextIndex >= pool.length) {
+      finish(nextAnswers, nextWrong);
+      return;
+    }
+
+    setAnswers(nextAnswers);
+    setCorrect(nextCorrect);
+    setWrong(nextWrong);
+    setIndex(nextIndex);
+  };
+
+  const finish = async (finalAnswers, finalWrong) => {
+    const raw = Date.now() - startTime;
+    setPhase('results');
+
+    try {
+      const res = await axios.post(
+        `${API_URL}/api/sprint/submit`,
+        { answers: finalAnswers, rawTimeMs: raw },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setResult(res.data);
+    } catch (err) {
+      setResult({
+        correctCount: 10,
+        wrongCount: finalWrong,
+        rawTimeMs: raw,
+        penaltyTotal: finalWrong * 2000,
+        penalizedTime: raw + (finalWrong * 2000),
+        newBest: false
+      });
+    }
+  };
+
+  const loadLeaderboard = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/api/sprint/leaderboard`);
+      setBoard(res.data);
+      setPhase('leaderboard');
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const formatTime = (ms) => (ms / 1000).toFixed(1) + 's';
+
+  if (phase === 'start') {
+    return (
+      <div style={{ maxWidth: '500px', margin: '40px auto', textAlign: 'center', color: '#fff', padding: '0 20px' }}>
+        <h1 style={{ fontSize: '48px', marginBottom: '10px' }}>🏃</h1>
+        <h2 style={{ color: '#00d9ff', marginBottom: '10px' }}>Sprint Mode</h2>
+        <p style={{ color: '#94a3b8', fontSize: '16px', lineHeight: '1.6', marginBottom: '30px' }}>
+          Spot broken code as fast as you can.<br/>
+          10 correct to finish.<br/>
+          Wrong guesses add +2s penalty.
+        </p>
+        <button
+          onClick={start}
+          style={{
+            width: '100%',
+            padding: '18px',
+            fontSize: '20px',
+            fontWeight: 'bold',
+            borderRadius: '12px',
+            border: 'none',
+            background: '#00d9ff',
+            color: '#0f172a',
+            cursor: 'pointer'
+          }}
+        >
+          Start Sprint
+        </button>
+        <button
+          onClick={loadLeaderboard}
+          style={{
+            marginTop: '15px',
+            width: '100%',
+            padding: '14px',
+            fontSize: '16px',
+            borderRadius: '12px',
+            border: '1px solid #334155',
+            background: 'transparent',
+            color: '#94a3b8',
+            cursor: 'pointer'
+          }}
+        >
+          View Leaderboard
+        </button>
+      </div>
+    );
+  }
+
+  if (phase === 'playing' && pool[index]) {
+    const current = pool[index];
+    const progressDots = Array.from({ length: 10 }, (_, i) => (
+      <span
+        key={i}
+        style={{
+          display: 'inline-block',
+          width: '8px',
+          height: '8px',
+          borderRadius: '50%',
+          margin: '0 3px',
+          background: i < correct ? '#00d9ff' : '#334155'
+        }}
+      />
+    ));
+
+    return (
+      <div style={{ maxWidth: '500px', margin: '20px auto', padding: '0 20px', color: '#fff' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <span style={{ color: '#00d9ff', fontSize: '24px', fontWeight: 'bold', fontVariantNumeric: 'tabular-nums' }}>
+            {formatTime(elapsed)}
+          </span>
+          <span style={{ color: '#64748b', fontSize: '14px' }}>
+            {correct}/10
+          </span>
+        </div>
+
+        <div style={{ textAlign: 'center', marginBottom: '25px' }}>
+          {progressDots}
+        </div>
+
+        <div
+          style={{
+            background: '#1a1a2e',
+            border: '1px solid #334155',
+            borderRadius: '12px',
+            padding: '24px',
+            marginBottom: '30px',
+            minHeight: '120px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+        >
+          <pre style={{ margin: 0, color: '#00ff00', fontFamily: 'monospace', fontSize: '15px', lineHeight: '1.5', textAlign: 'left', width: '100%' }}>
+            {current.code}
+          </pre>
+        </div>
+
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <button
+            onClick={() => guess(true)}
+            style={{
+              flex: 1,
+              padding: '20px',
+              fontSize: '18px',
+              fontWeight: 'bold',
+              borderRadius: '12px',
+              border: '2px solid #22c55e',
+              background: 'rgba(34, 197, 94, 0.1)',
+              color: '#22c55e',
+              cursor: 'pointer'
+            }}
+          >
+            ✅ Runs
+          </button>
+          <button
+            onClick={() => guess(false)}
+            style={{
+              flex: 1,
+              padding: '20px',
+              fontSize: '18px',
+              fontWeight: 'bold',
+              borderRadius: '12px',
+              border: '2px solid #ef4444',
+              background: 'rgba(239, 68, 68, 0.1)',
+              color: '#ef4444',
+              cursor: 'pointer'
+            }}
+          >
+            ❌ Crashes
+          </button>
+        </div>
+
+        {wrong > 0 && (
+          <p style={{ textAlign: 'center', color: '#ef4444', marginTop: '15px', fontSize: '14px' }}>
+            {wrong} wrong → +{(wrong * 2).toFixed(0)}s penalty
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  if (phase === 'results' && result) {
+    return (
+      <div style={{ maxWidth: '400px', margin: '40px auto', textAlign: 'center', color: '#fff', padding: '0 20px' }}>
+        <h1 style={{ fontSize: '48px', marginBottom: '5px' }}>🏁</h1>
+        <h2 style={{ marginBottom: '25px' }}>Sprint Complete</h2>
+
+        <div style={{ background: '#1a1a2e', borderRadius: '12px', padding: '24px', marginBottom: '25px' }}>
+          <div style={{ fontSize: '14px', color: '#64748b', marginBottom: '5px' }}>FINAL TIME</div>
+          <div style={{ fontSize: '42px', fontWeight: 'bold', color: '#00d9ff', fontVariantNumeric: 'tabular-nums' }}>
+            {(result.penalizedTime / 1000).toFixed(2)}s
+          </div>
+
+          <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'space-between', padding: '0 10px' }}>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '12px', color: '#64748b' }}>RAW</div>
+              <div style={{ fontSize: '18px', color: '#94a3b8' }}>{(result.rawTimeMs / 1000).toFixed(2)}s</div>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '12px', color: '#64748b' }}>WRONG</div>
+              <div style={{ fontSize: '18px', color: '#ef4444' }}>{result.wrongCount}</div>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '12px', color: '#64748b' }}>PENALTY</div>
+              <div style={{ fontSize: '18px', color: '#ef4444' }}>+{(result.penaltyTotal / 1000).toFixed(0)}s</div>
+            </div>
+          </div>
+        </div>
+
+        {result.newBest && (
+          <div style={{ color: '#22c55e', fontWeight: 'bold', marginBottom: '20px', fontSize: '18px' }}>
+            🎉 New Personal Best!
+          </div>
+        )}
+
+        <button
+          onClick={start}
+          style={{
+            width: '100%',
+            padding: '16px',
+            fontSize: '18px',
+            fontWeight: 'bold',
+            borderRadius: '12px',
+            border: 'none',
+            background: '#00d9ff',
+            color: '#0f172a',
+            cursor: 'pointer',
+            marginBottom: '10px'
+          }}
+        >
+          Try Again
+        </button>
+        <button
+          onClick={loadLeaderboard}
+          style={{
+            width: '100%',
+            padding: '14px',
+            fontSize: '16px',
+            borderRadius: '12px',
+            border: '1px solid #334155',
+            background: 'transparent',
+            color: '#94a3b8',
+            cursor: 'pointer'
+          }}
+        >
+          Leaderboard
+        </button>
+      </div>
+    );
+  }
+
+  if (phase === 'leaderboard') {
+    return (
+      <div style={{ maxWidth: '500px', margin: '20px auto', padding: '0 20px', color: '#fff' }}>
+        <button
+          onClick={() => setPhase('start')}
+          style={{ background: 'none', border: '1px solid #334155', color: '#94a3b8', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', marginBottom: '20px' }}
+        >
+          ← Back
+        </button>
+        <h2 style={{ color: '#00d9ff', marginBottom: '20px', textAlign: 'center' }}>🏆 Sprint Leaders</h2>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 15px', color: '#64748b', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '1px' }}>
+          <span>Rank</span>
+          <span>Player</span>
+          <span>Time</span>
+        </div>
+
+        {board.map((entry, i) => (
+          <div
+            key={i}
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '14px 15px',
+              background: i === 0 ? 'rgba(0, 217, 255, 0.08)' : '#1a1a2e',
+              border: i === 0 ? '1px solid rgba(0, 217, 255, 0.3)' : '1px solid #334155',
+              borderRadius: '10px',
+              marginBottom: '8px'
+            }}
+          >
+            <span style={{ width: '40px', color: i === 0 ? '#00d9ff' : '#64748b', fontWeight: 'bold' }}>
+              #{i + 1}
+            </span>
+            <span style={{ flex: 1, textAlign: 'left', paddingLeft: '10px', color: '#e2e8f0' }}>
+              {entry.username}
+            </span>
+            <span style={{ color: '#fff', fontWeight: 'bold', fontVariantNumeric: 'tabular-nums' }}>
+              {entry.finalTime}
+            </span>
+          </div>
+        ))}
+
+        {board.length === 0 && (
+          <p style={{ textAlign: 'center', color: '#64748b', marginTop: '40px' }}>No sprints completed yet. Be the first!</p>
+        )}
+      </div>
+    );
+  }
+
+  return null;
+}
+
 function Challenges({ token, refreshStats }) {
   const [challenges, setChallenges] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(-1);
@@ -233,7 +601,6 @@ function Challenges({ token, refreshStats }) {
     }
   };
 
-  // Detail view
   if (currentIndex !== -1 && challenges[currentIndex]) {
     const challenge = challenges[currentIndex];
     const hasNext = currentIndex + 1 < challenges.length;
@@ -307,7 +674,6 @@ function Challenges({ token, refreshStats }) {
     );
   }
 
-  // List view
   return (
     <div className="challenges-list">
       <h2>Challenges</h2>

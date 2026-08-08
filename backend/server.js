@@ -392,12 +392,13 @@ app.get('/api/leaderboard', async (req, res) => {
   }
 });
 
+// FIXED: Profile endpoint now returns isAdmin + sprint stats
 app.get('/api/user/profile', authenticateToken, async (req, res) => {
   const userId = req.user.id;
   
   try {
     const userResult = await pool.query(
-      "SELECT username, exp, rank, sprint_best_time, sprint_wrong_count FROM users WHERE id = $1", 
+      "SELECT username, exp, rank, is_admin, sprint_best_time, sprint_wrong_count FROM users WHERE id = $1", 
       [userId]
     );
     const user = userResult.rows[0];

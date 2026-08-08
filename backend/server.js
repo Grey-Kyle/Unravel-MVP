@@ -396,7 +396,10 @@ app.get('/api/user/profile', authenticateToken, async (req, res) => {
   const userId = req.user.id;
   
   try {
-    const userResult = await pool.query("SELECT username, exp, rank FROM users WHERE id = $1", [userId]);
+    const userResult = await pool.query(
+      "SELECT username, exp, rank, sprint_best_time, sprint_wrong_count FROM users WHERE id = $1", 
+      [userId]
+    );
     const user = userResult.rows[0];
     if (!user) return res.status(404).json({ error: 'User not found' });
     
@@ -408,9 +411,12 @@ app.get('/api/user/profile', authenticateToken, async (req, res) => {
       username: user.username,
       exp: user.exp,
       rank: user.rank,
+      isAdmin: user.is_admin === 1,
       leaderboardRank: parseInt(rankResult.rows[0].leaderboardrank),
       challengesCreated: parseInt(createdResult.rows[0].created),
-      challengesSolved: parseInt(solvedResult.rows[0].solved)
+      challengesSolved: parseInt(solvedResult.rows[0].solved),
+      sprintBestTime: user.sprint_best_time,
+      sprintWrongs: user.sprint_wrong_count
     });
   } catch (err) {
     return res.status(500).json({ error: err.message });

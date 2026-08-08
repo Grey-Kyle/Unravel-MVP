@@ -15,22 +15,22 @@ function App() {
 
   useEffect(() => {
     if (token) {
-      fetchUserStats();
+      fetchUserProfile();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
-  const fetchUserStats = async () => {
+  const fetchUserProfile = async () => {
     try {
-      const res = await axios.get(`${API_URL}/api/user/stats`, {
+      const res = await axios.get(`${API_URL}/api/user/profile`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setUser(res.data);
-      const adminStatus = res.data.isAdmin === true;
+      const adminStatus = res.data.isAdmin === true || res.data.is_admin === 1;
       setIsAdmin(adminStatus);
       localStorage.setItem('isAdmin', String(adminStatus));
     } catch (err) {
-      console.error('Error fetching stats:', err);
+      console.error('Error fetching profile:', err);
       if (err.response && (err.response.status === 401 || err.response.status === 403)) {
         logout();
       }
@@ -51,10 +51,29 @@ function App() {
       <header className="app-header">
         <h1>Unravel</h1>
         {token && (
-          <div className="user-info">
+          <div className="user-info" style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
             <span>
               EXP: {user?.exp ?? '...'} | Rank: {user?.rank ?? '...'}
             </span>
+            <button
+              onClick={() => setView('profile')}
+              title="Profile"
+              style={{
+                background: 'none',
+                border: '1px solid #00d9ff',
+                color: '#00d9ff',
+                borderRadius: '50%',
+                width: '36px',
+                height: '36px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                fontSize: '18px'
+              }}
+            >
+              👤
+            </button>
             <button onClick={logout}>Logout</button>
           </div>
         )}
@@ -67,7 +86,6 @@ function App() {
             <button onClick={() => setView('challenges')}>Challenges</button>
             <button onClick={() => setView('create')}>Create Challenge</button>
             <button onClick={() => setView('leaderboard')}>Leaderboard</button>
-            <button onClick={() => setView('profile')}>Profile</button>
             {isAdmin && (
               <button onClick={() => setView('admin')} className="admin-btn">
                 👑 Admin Dashboard
@@ -85,15 +103,72 @@ function App() {
           <Register setToken={setToken} setIsAdmin={setIsAdmin} setView={setView} />
         )}
         {token && view === 'sprint' && <Sprint token={token} />}
-        {token && view === 'challenges' && <Challenges key={challengesKey} token={token} refreshStats={fetchUserStats} />}
+        {token && view === 'challenges' && <Challenges key={challengesKey} token={token} refreshStats={fetchUserProfile} />}
         {token && view === 'create' && <CreateChallenge token={token} isAdmin={isAdmin} onBack={() => setView('challenges')} onCreated={() => setChallengesKey(k => k + 1)} />}
         {token && view === 'leaderboard' && <Leaderboard />}
-        {token && view === 'profile' && <Profile token={token} />}
+        {token && view === 'profile' && <ProfileView user={user} onBack={() => setView('challenges')} />}
         {token && view === 'admin' && isAdmin && <AdminDashboard token={token} onBack={() => setView('challenges')} />}
         {token && view === 'admin' && !isAdmin && (
           <div className="error">Unauthorized: Admin access only.</div>
         )}
       </main>
+    </div>
+  );
+}
+
+function ProfileView({ user, onBack }) {
+  if (!user) return <div style={{ color: '#fff', textAlign: 'center', marginTop: '40px' }}>Loading...</div>;
+
+  const formatSprintTime = (ms) => {
+    if (!ms) return '—';
+    return (ms / 1000).toFixed(2) + 's';
+  };
+
+  return (
+    <div style={{ maxWidth: '450px', margin: '30px auto', padding: '0 20px', color: '#fff' }}>
+      <button
+        onClick={onBack}
+        style={{ background: 'none', border: '1px solid #334155', color: '#94a3b8', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', marginBottom: '20px' }}
+      >
+        ← Back
+      </button>
+
+      <div style={{ textAlign: 'center', marginBottom: '30px' }}>
+        <div style={{ fontSize: '48px', marginBottom: '10px' }}>👤</div>
+        <h2 style={{ color: '#00d9ff', margin: '0' }}>{user.username}</h2>
+        <p style={{ color: '#64748b', margin: '5px 0 0 0' }}>{user.rank}</p>
+      </div>
+
+      <div style={{ display: 'grid', gap: '12px' }}>
+        <StatCard label="EXP" value={user.exp} />
+        <StatCard label="Leaderboard Rank" value={`#${user.leaderboardRank}`} />
+        <StatCard label="Challenges Solved" value={user.challengesSolved} />
+        <StatCard label="Challenges Created" value={user.challengesCreated} />
+        
+        <div style={{ background: '#1a1a2e', border: '1px solid #334155', borderRadius: '10px', padding: '16px', marginTop: '8px' }}>
+          <div style={{ fontSize: '12px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px' }}>Sprint Best</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#00d9ff' }}>
+                {formatSprintTime(user.sprintBestTime)}
+              </div>
+              <div style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>
+                {user.sprintBestTime ? `${user.sprintWrongs || 0} wrong when set` : 'No sprint completed yet'}
+              </div>
+            </div>
+            <div style={{ fontSize: '32px' }}>🏃</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatCard({ label, value }) {
+  return (
+    <div style={{ background: '#1a1a2e', border: '1px solid #334155', borderRadius: '10px', padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <span style={{ color: '#94a3b8', fontSize: '14px' }}>{label}</span>
+      <span style={{ color: '#fff', fontSize: '18px', fontWeight: 'bold' }}>{value ?? 0}</span>
     </div>
   );
 }

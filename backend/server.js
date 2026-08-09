@@ -19,7 +19,7 @@ if (!JWT_SECRET) {
 
 // Rate limiting
 const generalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
+  windowMs: 15 * 60 * 1000,
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
@@ -49,7 +49,6 @@ app.use(cors({
   optionsSuccessStatus: 204
 }));
 
-// Reduce body limit — 10MB was excessive
 app.use(express.json({ limit: '1mb' }));
 
 const authenticateToken = (req, res, next) => {
@@ -104,7 +103,6 @@ app.post('/api/register', authLimiter, async (req, res) => {
       console.log("First user registered! Promoted to Admin.");
     }
     
-    // SECURITY: Token expires in 7 days
     const token = jwt.sign({ id: newUserId, username }, JWT_SECRET, { expiresIn: '7d' });
     res.json({ token, userId: newUserId, username, isAdmin });
     
@@ -127,7 +125,6 @@ app.post('/api/login', authLimiter, async (req, res) => {
     const validPassword = await bcrypt.compare(password, user.password_hash);
     if (!validPassword) return res.status(400).json({ error: 'Invalid password' });
     
-    // SECURITY: Token expires in 7 days
     const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '7d' });
     res.json({ 
       token, 
@@ -172,6 +169,46 @@ app.get('/api/user/stats', authenticateToken, async (req, res) => {
   }
 });
 
+app.get('/api/recent-solved', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT c.id, c.title, c.difficulty, c.language, MAX(a.attempted_at) as solved_at
+       FROM challenges c
+       JOIN attempts a ON c.id = a.challenge_id
+       WHERE a.user_id = $1 AND a.is_correct = 1
+       GROUP BY c.id
+       ORDER BY MAX(a.attempted_at) DESC
+       LIMIT 3`,
+      [req.user.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/daily', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT * FROM challenges WHERE is_official = 1 ORDER BY id"
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'No daily challenge available' });
+    }
+    
+    const today = new Date();
+    const startOfYear = new Date(today.getFullYear(), 0, 0);
+    const diff = today - startOfYear;
+    const dayOfYear = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const challenge = result.rows[dayOfYear % result.rows.length];
+    
+    res.json(challenge);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/challenges/:id/submit', authenticateToken, async (req, res) => {
   const challengeId = req.params.id;
   const { user_answer } = req.body;
@@ -201,12 +238,6 @@ app.post('/api/challenges/:id/submit', authenticateToken, async (req, res) => {
         already_solved: true
       });
     }
-
-    // Check if user already practiced this challenge
-    const practicedResult = await pool.query(
-      "SELECT id FROM practiced WHERE user_id = $1 AND challenge_id = $2",
-      [userId, challengeId]
-    );
     
     await pool.query(
       "INSERT INTO attempts (user_id, challenge_id, is_correct) VALUES ($1, $2, $3)",
@@ -214,16 +245,6 @@ app.post('/api/challenges/:id/submit', authenticateToken, async (req, res) => {
     );
     
     if (is_correct) {
-      // If practiced, no EXP — but still record the solve
-      if (practicedResult.rows.length > 0) {
-        return res.json({
-          is_correct: true,
-          exp_earned: 0,
-          message: 'Correct, but you already practiced this challenge. No EXP awarded.',
-          already_practiced: true
-        });
-      }
-
       const userResult = await pool.query("SELECT exp FROM users WHERE id = $1", [userId]);
       const user = userResult.rows[0];
       const newExp = user.exp + challenge.exp_value;
@@ -252,7 +273,7 @@ app.post('/api/challenges/:id/submit', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/challenges', authenticateToken, async (req, res) => {
-  const { title, code, correct_output, explanation, difficulty, language, is_official } = req.body;
+  const { title, code, correct_output, difficulty, language, is_official } = req.body;
   const createdBy = req.user.id;
   
   if (!title || !code || !correct_output) {
@@ -278,7 +299,6 @@ app.post('/api/challenges', authenticateToken, async (req, res) => {
   const timeouts = new Set();
   const intervals = new Set();
 
-  // Stage 1: Compile — catches syntax errors
   let script;
   try {
     script = new vm.Script(code);
@@ -290,7 +310,6 @@ app.post('/api/challenges', authenticateToken, async (req, res) => {
     });
   }
 
-  // Stage 2: Execute — catches runtime errors
   try {
     const context = vm.createContext({ 
       console: mockConsole,
@@ -303,7 +322,6 @@ app.post('/api/challenges', authenticateToken, async (req, res) => {
       Float32Array, Float64Array, Int8Array, Int16Array, Int32Array,
       Uint8Array, Uint16Array, Uint32Array, Uint8ClampedArray,
       DataView,
-      // SECURITY: Removed escape vectors: Buffer, ArrayBuffer, SharedArrayBuffer, Atomics, Proxy, Reflect
       setTimeout: (fn, ms = 0, ...args) => {
         const t = setTimeout(() => {
           timeouts.delete(t);
@@ -329,10 +347,8 @@ app.post('/api/challenges', authenticateToken, async (req, res) => {
     
     script.runInContext(context, { timeout: 2000 });
     
-    // Flush microtasks and 0ms timers so async code completes
     await new Promise(r => setTimeout(r, 100));
     
-    // Clean up any lingering intervals
     intervals.forEach(clearInterval);
     timeouts.forEach(clearTimeout);
     
@@ -344,7 +360,6 @@ app.post('/api/challenges', authenticateToken, async (req, res) => {
     });
   }
 
-  // Stage 3: Verify output
   if (output.trim() !== correct_output.trim()) {
     return res.status(400).json({ 
       error: 'Output Mismatch',
@@ -361,9 +376,9 @@ app.post('/api/challenges', authenticateToken, async (req, res) => {
     const officialFlag = (user && user.is_admin === 1 && is_official) ? 1 : 0;
     
     const result = await pool.query(
-      `INSERT INTO challenges (title, code, correct_output, explanation, difficulty, exp_value, language, created_by, is_official) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
-      [title, code, correct_output, explanation || null, difficulty, exp_value, language || 'javascript', createdBy, officialFlag]
+      `INSERT INTO challenges (title, code, correct_output, difficulty, exp_value, language, created_by, is_official) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+      [title, code, correct_output, difficulty, exp_value, language || 'javascript', createdBy, officialFlag]
     );
     
     res.json({ 
@@ -387,7 +402,6 @@ app.delete('/api/challenges/:id', authenticateToken, async (req, res) => {
     }
     
     await pool.query("DELETE FROM attempts WHERE challenge_id = $1", [challengeId]);
-    await pool.query("DELETE FROM practiced WHERE challenge_id = $1", [challengeId]);
     
     const result = await pool.query("DELETE FROM challenges WHERE id = $1", [challengeId]);
     if (result.rowCount === 0) return res.status(404).json({ error: 'Challenge not found' });
@@ -409,7 +423,6 @@ app.get('/api/leaderboard', async (req, res) => {
   }
 });
 
-// FIXED: Profile endpoint now returns isAdmin + sprint stats
 app.get('/api/user/profile', authenticateToken, async (req, res) => {
   const userId = req.user.id;
   
@@ -441,35 +454,19 @@ app.get('/api/user/profile', authenticateToken, async (req, res) => {
   }
 });
 
-// ─── PRACTICE LIBRARY ───
 app.get('/api/practice', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT c.id, c.title, c.code, c.correct_output, c.explanation, c.difficulty, u.username as creator_name,
-        CASE WHEN p.id IS NOT NULL THEN true ELSE false END as is_practiced
+      `SELECT c.id, c.title, c.code, c.correct_output, c.difficulty, c.language
        FROM challenges c
-       LEFT JOIN users u ON c.created_by = u.id
-       LEFT JOIN practiced p ON p.challenge_id = c.id AND p.user_id = $1
-       ORDER BY c.difficulty ASC, c.id ASC`,
+       WHERE c.id IN (
+         SELECT DISTINCT challenge_id FROM attempts 
+         WHERE user_id = $1 AND is_correct = 1
+       )
+       ORDER BY c.difficulty ASC`,
       [req.user.id]
     );
     res.json(result.rows);
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
-  }
-});
-
-app.post('/api/practice/:id/view', authenticateToken, async (req, res) => {
-  const challengeId = req.params.id;
-  const userId = req.user.id;
-  
-  try {
-    await pool.query(
-      `INSERT INTO practiced (user_id, challenge_id) VALUES ($1, $2)
-       ON CONFLICT (user_id, challenge_id) DO NOTHING`,
-      [userId, challengeId]
-    );
-    res.json({ message: 'Marked as practiced' });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
@@ -491,12 +488,7 @@ const SPRINT_POOL = [
   { id: 12, code: 'let a = [1,2,3);\nconsole.log(a);', runs: false },
   { id: 13, code: 'console.log(2 ** 3);', runs: true },
   { id: 14, code: 'if (true {\n  console.log("yes");\n}', runs: false },
-  { id: 15, code: 'console.log(Math.max(5, 10));', runs: true },
-  { id: 16, code: 'console.log([1,2,3].filter(Boolean));', runs: true },
-  { id: 17, code: 'console.log([3,1,2].sort());', runs: true },
-  { id: 18, code: 'console.log(typeof hoisted);\nvar hoisted = 5;', runs: true },
-  { id: 19, code: 'console.log(a);\nlet a = 5;', runs: false },
-  { id: 20, code: 'console.log(0.1 + 0.2 === 0.3);', runs: true }
+  { id: 15, code: 'console.log(Math.max(5, 10));', runs: true }
 ];
 
 const TARGET_CORRECT = 10;

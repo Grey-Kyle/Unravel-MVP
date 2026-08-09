@@ -5,8 +5,93 @@ import './App.css';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
+function App() {
+  const [token, setToken] = useState(localStorage.getItem('token'));
+  const [user, setUser] = useState(null);
+  const [view, setView] = useState(token ? 'home' : 'login');
+  const [isAdmin, setIsAdmin] = useState(localStorage.getItem('isAdmin') === 'true');
+  const [challengesKey, setChallengesKey] = useState(0);
+
+  useEffect(() => {
+    if (token) {
+      fetchUserProfile();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
+  const fetchUserProfile = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/api/user/profile`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setUser(res.data);
+      const adminStatus = res.data.isAdmin === true || res.data.is_admin === 1;
+      setIsAdmin(adminStatus);
+      localStorage.setItem('isAdmin', String(adminStatus));
+    } catch (err) {
+      console.error('Error fetching profile:', err);
+      if (err.response && (err.response.status === 401 || err.response.status === 403)) {
+        logout();
+      }
+    }
+  };
+
+  const logout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('isAdmin');
+    setToken(null);
+    setUser(null);
+    setIsAdmin(false);
+    setView('login');
+  };
+
+  return (
+    <div className="App" style={{ display: 'flex', minHeight: '100vh', background: '#0f172a' }}>
+      {token && (
+        <Sidebar 
+          view={view} 
+          setView={setView} 
+          user={user} 
+          isAdmin={isAdmin} 
+          onLogout={logout} 
+        />
+      )}
+      
+      <div style={{ 
+        flex: 1, 
+        marginLeft: token ? '240px' : '0',
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column'
+      }}>
+        {!token ? (
+          <main style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+            {view === 'login' && <Login setToken={setToken} setIsAdmin={setIsAdmin} setView={setView} />}
+            {view === 'register' && <Register setToken={setToken} setIsAdmin={setIsAdmin} setView={setView} />}
+          </main>
+        ) : (
+          <main style={{ flex: 1, padding: '30px' }}>
+            {view === 'home' && <Home user={user} token={token} setView={setView} />}
+            {view === 'sprint' && <Sprint token={token} />}
+            {view === 'challenges' && <Challenges key={challengesKey} token={token} refreshStats={fetchUserProfile} />}
+            {view === 'practice' && <Practice token={token} />}
+            {view === 'create' && <CreateChallenge token={token} isAdmin={isAdmin} onBack={() => setView('challenges')} onCreated={() => setChallengesKey(k => k + 1)} />}
+            {view === 'leaderboard' && <Leaderboard />}
+            {view === 'profile' && <ProfileView user={user} onBack={() => setView('home')} />}
+            {view === 'admin' && isAdmin && <AdminDashboard token={token} onBack={() => setView('home')} />}
+            {view === 'admin' && !isAdmin && (
+              <div className="error">Unauthorized: Admin access only.</div>
+            )}
+          </main>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function Sidebar({ view, setView, user, isAdmin, onLogout }) {
   const items = [
+    { id: 'home', label: 'Home', icon: '🏠' },
     { id: 'sprint', label: 'Sprint', icon: '🏃' },
     { id: 'challenges', label: 'Challenges', icon: '🧩' },
     { id: 'practice', label: 'Practice', icon: '📚' },
@@ -29,13 +114,11 @@ function Sidebar({ view, setView, user, isAdmin, onLogout }) {
       bottom: 0,
       zIndex: 10
     }}>
-      {/* Logo */}
       <div style={{ padding: '0 24px 20px', borderBottom: '1px solid #1e293b', marginBottom: '12px' }}>
         <h1 style={{ color: '#00d9ff', margin: 0, fontSize: '24px', letterSpacing: '-0.5px' }}>Unravel</h1>
         <p style={{ color: '#64748b', margin: '6px 0 0', fontSize: '12px' }}>🟨 JavaScript</p>
       </div>
 
-      {/* Navigation */}
       <nav style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px', padding: '0 12px' }}>
         {items.map(item => {
           const active = view === item.id;
@@ -73,7 +156,6 @@ function Sidebar({ view, setView, user, isAdmin, onLogout }) {
         })}
       </nav>
 
-      {/* User Card */}
       <div style={{ padding: '16px 20px 0', borderTop: '1px solid #1e293b', marginTop: 'auto' }}>
         <button
           onClick={() => setView('profile')}
@@ -140,84 +222,164 @@ function Sidebar({ view, setView, user, isAdmin, onLogout }) {
     </aside>
   );
 }
-function App() {
-  const [token, setToken] = useState(localStorage.getItem('token'));
-  const [user, setUser] = useState(null);
-  const [view, setView] = useState('login');
-  const [isAdmin, setIsAdmin] = useState(localStorage.getItem('isAdmin') === 'true');
-  const [challengesKey, setChallengesKey] = useState(0);
+
+function Home({ user, token, setView }) {
+  const [recent, setRecent] = useState([]);
+  const [daily, setDaily] = useState(null);
 
   useEffect(() => {
-    if (token) {
-      fetchUserProfile();
-    }
+    fetchRecent();
+    fetchDaily();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+  }, []);
 
-  const fetchUserProfile = async () => {
+  const fetchRecent = async () => {
     try {
-      const res = await axios.get(`${API_URL}/api/user/profile`, {
+      const res = await axios.get(`${API_URL}/api/recent-solved`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setUser(res.data);
-      const adminStatus = res.data.isAdmin === true || res.data.is_admin === 1;
-      setIsAdmin(adminStatus);
-      localStorage.setItem('isAdmin', String(adminStatus));
+      setRecent(res.data);
     } catch (err) {
-      console.error('Error fetching profile:', err);
-      if (err.response && (err.response.status === 401 || err.response.status === 403)) {
-        logout();
-      }
+      console.error(err);
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('isAdmin');
-    setToken(null);
-    setUser(null);
-    setIsAdmin(false);
-    setView('login');
+  const fetchDaily = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/api/daily`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setDaily(res.data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const formatSprintTime = (ms) => {
+    if (!ms) return null;
+    return (ms / 1000).toFixed(2) + 's';
   };
 
   return (
-    <div className="App" style={{ display: 'flex', minHeight: '100vh', background: '#0f172a' }}>
-      {token && (
-        <Sidebar 
-          view={view} 
-          setView={setView} 
-          user={user} 
-          isAdmin={isAdmin} 
-          onLogout={logout} 
-        />
-      )}
-      
-      <div style={{ 
-        flex: 1, 
-        marginLeft: token ? '240px' : '0',
-        minHeight: '100vh',
-        display: 'flex',
-        flexDirection: 'column'
-      }}>
-        {!token ? (
-          <main style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-            {view === 'login' && <Login setToken={setToken} setIsAdmin={setIsAdmin} setView={setView} />}
-            {view === 'register' && <Register setToken={setToken} setIsAdmin={setIsAdmin} setView={setView} />}
-          </main>
-        ) : (
-          <main style={{ flex: 1, padding: '30px' }}>
-            {view === 'sprint' && <Sprint token={token} />}
-            {view === 'challenges' && <Challenges key={challengesKey} token={token} refreshStats={fetchUserProfile} />}
-            {view === 'practice' && <Practice token={token} />}
-            {view === 'create' && <CreateChallenge token={token} isAdmin={isAdmin} onBack={() => setView('challenges')} onCreated={() => setChallengesKey(k => k + 1)} />}
-            {view === 'leaderboard' && <Leaderboard />}
-            {view === 'profile' && <ProfileView user={user} onBack={() => setView('challenges')} />}
-            {view === 'admin' && isAdmin && <AdminDashboard token={token} onBack={() => setView('challenges')} />}
-            {view === 'admin' && !isAdmin && (
-              <div className="error">Unauthorized: Admin access only.</div>
-            )}
-          </main>
-        )}
+    <div style={{ maxWidth: '700px', margin: '0 auto', color: '#fff' }}>
+      {/* Greeting */}
+      <div style={{ marginBottom: '32px' }}>
+        <h2 style={{ margin: '0 0 8px', color: '#e2e8f0', fontSize: '28px' }}>
+          Hey {user?.username}, ready to sprint?
+        </h2>
+        <p style={{ margin: 0, color: '#64748b', fontSize: '15px' }}>
+          {user?.sprintBestTime 
+            ? `Your record is ${formatSprintTime(user.sprintBestTime)}. Beat it.` 
+            : 'Start your first sprint and set a record.'}
+        </p>
+      </div>
+
+      {/* Big Sprint CTA */}
+      <button
+        onClick={() => setView('sprint')}
+        style={{
+          width: '100%',
+          padding: '24px',
+          borderRadius: '16px',
+          border: 'none',
+          background: 'linear-gradient(135deg, #00d9ff 0%, #0099cc 100%)',
+          color: '#0f172a',
+          fontSize: '20px',
+          fontWeight: 'bold',
+          cursor: 'pointer',
+          marginBottom: '32px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '12px'
+        }}
+      >
+        <span style={{ fontSize: '28px' }}>🏃</span>
+        Start Sprint
+      </button>
+
+      {/* Stats Row */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '32px' }}>
+        <StatCard label="EXP" value={user?.exp ?? 0} />
+        <StatCard label="Rank" value={user?.rank ?? 'Novice'} />
+        <StatCard label="Solved" value={user?.challengesSolved ?? 0} />
+      </div>
+
+      {/* Two Column Layout */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+        {/* Recent Activity */}
+        <div>
+          <h3 style={{ color: '#94a3b8', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }}>
+            Recent Activity
+          </h3>
+          {recent.length === 0 ? (
+            <p style={{ color: '#64748b', fontSize: '14px' }}>No challenges solved yet.</p>
+          ) : (
+            recent.map(c => (
+              <div
+                key={c.id}
+                onClick={() => setView('practice')}
+                style={{
+                  background: '#1a1a2e',
+                  border: '1px solid #334155',
+                  borderRadius: '10px',
+                  padding: '14px 16px',
+                  marginBottom: '10px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}
+              >
+                <div>
+                  <div style={{ color: '#e2e8f0', fontSize: '14px', fontWeight: '500' }}>{c.title}</div>
+                  <div style={{ color: '#64748b', fontSize: '12px', marginTop: '4px' }}>{c.language} • Difficulty {c.difficulty}</div>
+                </div>
+                <span style={{ color: '#00d9ff', fontSize: '13px' }}>Review →</span>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Daily Pick */}
+        <div>
+          <h3 style={{ color: '#94a3b8', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }}>
+            Daily Pick
+          </h3>
+          {daily ? (
+            <div style={{
+              background: '#1a1a2e',
+              border: '1px solid #334155',
+              borderRadius: '10px',
+              padding: '20px'
+            }}>
+              <div style={{ color: '#e2e8f0', fontSize: '16px', fontWeight: '600', marginBottom: '8px' }}>
+                {daily.title}
+              </div>
+              <div style={{ color: '#64748b', fontSize: '13px', marginBottom: '16px' }}>
+                {daily.language} • Difficulty {daily.difficulty} • {daily.exp_value} EXP
+              </div>
+              <button
+                onClick={() => setView('challenges')}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  borderRadius: '8px',
+                  border: '1px solid #00d9ff',
+                  background: 'transparent',
+                  color: '#00d9ff',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: 'pointer'
+                }}
+              >
+                Try it →
+              </button>
+            </div>
+          ) : (
+            <p style={{ color: '#64748b', fontSize: '14px' }}>No daily challenge available.</p>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -295,7 +457,7 @@ function Login({ setToken, setIsAdmin, setView }) {
       localStorage.setItem('isAdmin', String(adminStatus));
       setToken(response.data.token);
       setIsAdmin(adminStatus);
-      setView('challenges');
+      setView('home');
     } catch (err) {
       setError(err.response?.data?.error || 'Login failed');
     }
@@ -304,6 +466,9 @@ function Login({ setToken, setIsAdmin, setView }) {
   return (
     <div className="auth-form">
       <h2>Login</h2>
+      <p style={{ color: '#64748b', textAlign: 'center', marginBottom: '20px' }}>
+        A speed game for spotting broken JavaScript.
+      </p>
       {error && <div className="error">{error}</div>}
       <form onSubmit={handleSubmit}>
         <input type="text" placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} required />
@@ -330,7 +495,7 @@ function Register({ setToken, setIsAdmin, setView }) {
       localStorage.setItem('isAdmin', String(adminStatus));
       setToken(response.data.token);
       setIsAdmin(adminStatus);
-      setView('challenges');
+      setView('home');
     } catch (err) {
       setError(err.response?.data?.error || 'Registration failed');
     }

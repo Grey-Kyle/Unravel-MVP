@@ -201,6 +201,12 @@ app.post('/api/challenges/:id/submit', authenticateToken, async (req, res) => {
         already_solved: true
       });
     }
+
+    // Check if user already practiced this challenge
+    const practicedResult = await pool.query(
+      "SELECT id FROM practiced WHERE user_id = $1 AND challenge_id = $2",
+      [userId, challengeId]
+    );
     
     await pool.query(
       "INSERT INTO attempts (user_id, challenge_id, is_correct) VALUES ($1, $2, $3)",
@@ -208,6 +214,16 @@ app.post('/api/challenges/:id/submit', authenticateToken, async (req, res) => {
     );
     
     if (is_correct) {
+      // If practiced, no EXP — but still record the solve
+      if (practicedResult.rows.length > 0) {
+        return res.json({
+          is_correct: true,
+          exp_earned: 0,
+          message: 'Correct, but you already practiced this challenge. No EXP awarded.',
+          already_practiced: true
+        });
+      }
+
       const userResult = await pool.query("SELECT exp FROM users WHERE id = $1", [userId]);
       const user = userResult.rows[0];
       const newExp = user.exp + challenge.exp_value;
@@ -236,7 +252,7 @@ app.post('/api/challenges/:id/submit', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/challenges', authenticateToken, async (req, res) => {
-  const { title, code, correct_output, difficulty, language, is_official } = req.body;
+  const { title, code, correct_output, explanation, difficulty, language, is_official } = req.body;
   const createdBy = req.user.id;
   
   if (!title || !code || !correct_output) {
@@ -345,9 +361,9 @@ app.post('/api/challenges', authenticateToken, async (req, res) => {
     const officialFlag = (user && user.is_admin === 1 && is_official) ? 1 : 0;
     
     const result = await pool.query(
-      `INSERT INTO challenges (title, code, correct_output, difficulty, exp_value, language, created_by, is_official) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
-      [title, code, correct_output, difficulty, exp_value, language || 'javascript', createdBy, officialFlag]
+      `INSERT INTO challenges (title, code, correct_output, explanation, difficulty, exp_value, language, created_by, is_official) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+      [title, code, correct_output, explanation || null, difficulty, exp_value, language || 'javascript', createdBy, officialFlag]
     );
     
     res.json({ 
@@ -371,6 +387,7 @@ app.delete('/api/challenges/:id', authenticateToken, async (req, res) => {
     }
     
     await pool.query("DELETE FROM attempts WHERE challenge_id = $1", [challengeId]);
+    await pool.query("DELETE FROM practiced WHERE challenge_id = $1", [challengeId]);
     
     const result = await pool.query("DELETE FROM challenges WHERE id = $1", [challengeId]);
     if (result.rowCount === 0) return res.status(404).json({ error: 'Challenge not found' });
@@ -424,46 +441,62 @@ app.get('/api/user/profile', authenticateToken, async (req, res) => {
   }
 });
 
+// ─── PRACTICE LIBRARY ───
+app.get('/api/practice', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT c.id, c.title, c.code, c.correct_output, c.explanation, c.difficulty, u.username as creator_name,
+        CASE WHEN p.id IS NOT NULL THEN true ELSE false END as is_practiced
+       FROM challenges c
+       LEFT JOIN users u ON c.created_by = u.id
+       LEFT JOIN practiced p ON p.challenge_id = c.id AND p.user_id = $1
+       ORDER BY c.difficulty ASC, c.id ASC`,
+      [req.user.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/practice/:id/view', authenticateToken, async (req, res) => {
+  const challengeId = req.params.id;
+  const userId = req.user.id;
+  
+  try {
+    await pool.query(
+      `INSERT INTO practiced (user_id, challenge_id) VALUES ($1, $2)
+       ON CONFLICT (user_id, challenge_id) DO NOTHING`,
+      [userId, challengeId]
+    );
+    res.json({ message: 'Marked as practiced' });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── SPRINT MODE ───
 const SPRINT_POOL = [
-  // ─── RUNS (clean code) ───
   { id: 1, code: 'console.log("hello");', runs: true },
-  { id: 2, code: 'let a = 5;\nconsole.log(a);', runs: true },
-  { id: 3, code: 'console.log(10 / 0);', runs: true },
-  { id: 4, code: 'const arr = [1, 2, 3];\nconsole.log(arr[1]);', runs: true },
-  { id: 5, code: 'let x = 1;\nlet y = 2;\nconsole.log(x + y);', runs: true },
-  { id: 6, code: 'console.log(typeof "hi");', runs: true },
-  { id: 7, code: 'console.log(2 ** 3);', runs: true },
-  { id: 8, code: 'console.log(Math.max(5, 10));', runs: true },
-  { id: 9, code: 'console.log([1,2,3].length);', runs: true },
-  { id: 10, code: 'console.log(typeof []);', runs: true },
-  { id: 11, code: 'console.log("5" - 3);', runs: true },
-  { id: 12, code: 'console.log(!!"false");', runs: true },
-  { id: 13, code: 'console.log({a:1}.a);', runs: true },
-  { id: 14, code: 'console.log(parseInt("10px"));', runs: true },
-  { id: 15, code: 'console.log(true + true);', runs: true },
-  { id: 16, code: 'console.log(1 < 2 < 3);', runs: true },
-  { id: 17, code: 'console.log([] == ![]);', runs: true },
-  { id: 18, code: 'console.log("b" + "a" + +"a" + "a");', runs: true },
-  { id: 19, code: 'console.log([...new Set([1,1,2])]);', runs: true },
-  { id: 20, code: 'console.log(NaN === NaN);', runs: true },
-
-  // ─── CRASHES (syntax or runtime) ───
-  { id: 21, code: 'console.log(x);', runs: false },
-  { id: 22, code: 'for (let i = 0; i < 3; i++\n  console.log(i);', runs: false },
-  { id: 23, code: 'function foo() {\n  console.log(bar);\n}\nfoo();', runs: false },
-  { id: 24, code: 'console.log("missing quote);', runs: false },
-  { id: 25, code: 'const obj = {a: 1;\nconsole.log(obj);', runs: false },
-  { id: 26, code: 'let a = [1,2,3);\nconsole.log(a);', runs: false },
-  { id: 27, code: 'if (true {\n  console.log("yes");\n}', runs: false },
-  { id: 28, code: 'const x = 1;\nconst x = 2;\nconsole.log(x);', runs: false },
-  { id: 29, code: 'JSON.parse("not json");', runs: false },
-  { id: 30, code: 'null.toString();', runs: false },
-  { id: 31, code: 'const f = null;\nf();', runs: false },
-  { id: 32, code: 'new Array(-1);', runs: false },
-  { id: 33, code: 'const s = "hi";\ns();', runs: false },
-  { id: 34, code: 'let 1name = "hi";', runs: false },
-  { id: 35, code: 'return 1;', runs: false }
+  { id: 2, code: 'console.log(x);', runs: false },
+  { id: 3, code: 'let a = 5;\nconsole.log(a);', runs: true },
+  { id: 4, code: 'for (let i = 0; i < 3; i++\n  console.log(i);', runs: false },
+  { id: 5, code: 'console.log(10 / 0);', runs: true },
+  { id: 6, code: 'function foo() {\n  console.log(bar);\n}\nfoo();', runs: false },
+  { id: 7, code: 'const arr = [1, 2, 3];\nconsole.log(arr[1]);', runs: true },
+  { id: 8, code: 'console.log("missing quote);', runs: false },
+  { id: 9, code: 'let x = 1;\nlet y = 2;\nconsole.log(x + y);', runs: true },
+  { id: 10, code: 'const obj = {a: 1;\nconsole.log(obj);', runs: false },
+  { id: 11, code: 'console.log(typeof "hi");', runs: true },
+  { id: 12, code: 'let a = [1,2,3);\nconsole.log(a);', runs: false },
+  { id: 13, code: 'console.log(2 ** 3);', runs: true },
+  { id: 14, code: 'if (true {\n  console.log("yes");\n}', runs: false },
+  { id: 15, code: 'console.log(Math.max(5, 10));', runs: true },
+  { id: 16, code: 'console.log([1,2,3].filter(Boolean));', runs: true },
+  { id: 17, code: 'console.log([3,1,2].sort());', runs: true },
+  { id: 18, code: 'console.log(typeof hoisted);\nvar hoisted = 5;', runs: true },
+  { id: 19, code: 'console.log(a);\nlet a = 5;', runs: false },
+  { id: 20, code: 'console.log(0.1 + 0.2 === 0.3);', runs: true }
 ];
 
 const TARGET_CORRECT = 10;

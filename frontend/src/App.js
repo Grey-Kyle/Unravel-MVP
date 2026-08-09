@@ -83,6 +83,7 @@ function App() {
           <>
             <button onClick={() => setView('sprint')}>Sprint</button>
             <button onClick={() => setView('challenges')}>Challenges</button>
+            <button onClick={() => setView('practice')}>Practice</button>
             <button onClick={() => setView('create')}>Create Challenge</button>
             <button onClick={() => setView('leaderboard')}>Leaderboard</button>
             {isAdmin && (
@@ -103,6 +104,7 @@ function App() {
         )}
         {token && view === 'sprint' && <Sprint token={token} />}
         {token && view === 'challenges' && <Challenges key={challengesKey} token={token} refreshStats={fetchUserProfile} />}
+        {token && view === 'practice' && <Practice token={token} />}
         {token && view === 'create' && <CreateChallenge token={token} isAdmin={isAdmin} onBack={() => setView('challenges')} onCreated={() => setChallengesKey(k => k + 1)} />}
         {token && view === 'leaderboard' && <Leaderboard />}
         {token && view === 'profile' && <ProfileView user={user} onBack={() => setView('challenges')} />}
@@ -760,6 +762,113 @@ function Challenges({ token, refreshStats }) {
           ) : (
             <span style={{ color: '#64748b', fontSize: '0.85em' }}> by {challenge.creator_name || 'Unknown'}</span>
           )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Practice({ token }) {
+  const [solved, setSolved] = useState([]);
+  const [selected, setSelected] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchSolved();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const fetchSolved = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/api/practice`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setSolved(res.data);
+    } catch (err) {
+      console.error('Error fetching practice library:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return <div style={{ color: '#64748b', textAlign: 'center', marginTop: '40px' }}>Loading...</div>;
+  }
+
+  if (selected) {
+    return (
+      <div style={{ maxWidth: '700px', margin: '20px auto', padding: '0 20px', color: '#fff' }}>
+        <button
+          onClick={() => setSelected(null)}
+          style={{ background: 'none', border: '1px solid #334155', color: '#94a3b8', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', marginBottom: '20px' }}
+        >
+          ← Back to Library
+        </button>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px' }}>
+          <h2 style={{ color: '#00d9ff', margin: 0 }}>{selected.title}</h2>
+          <span style={{ background: '#1a1a2e', color: '#64748b', padding: '4px 10px', borderRadius: '4px', fontSize: '12px', border: '1px solid #334155' }}>
+            📚 REVIEW MODE
+          </span>
+        </div>
+
+        <div style={{ color: '#64748b', fontSize: '14px', marginBottom: '20px' }}>
+          Difficulty: {selected.difficulty} | Language: {selected.language}
+        </div>
+
+        <div style={{ background: '#1a1a2e', border: '1px solid #334155', borderRadius: '12px', padding: '20px', marginBottom: '20px' }}>
+          <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '10px' }}>Code</div>
+          <pre style={{ margin: 0, color: '#00ff00', fontFamily: 'monospace', fontSize: '14px', lineHeight: '1.5' }}>
+            {selected.code}
+          </pre>
+        </div>
+
+        <div style={{ background: '#0f172a', border: '1px solid #00d9ff', borderRadius: '12px', padding: '20px', marginBottom: '20px' }}>
+          <div style={{ fontSize: '11px', color: '#00d9ff', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '10px' }}>Correct Output</div>
+          <pre style={{ margin: 0, color: '#e2e8f0', fontFamily: 'monospace', fontSize: '15px', lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>
+            {selected.correct_output}
+          </pre>
+        </div>
+
+        <div style={{ background: '#1a1a2e', border: '1px solid #334155', borderRadius: '12px', padding: '20px' }}>
+          <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '10px' }}>Explanation</div>
+          <p style={{ color: '#94a3b8', margin: 0, lineHeight: '1.6' }}>
+            {selected.explanation || 'No explanation provided yet. Try tracing the code line by line to understand why this output occurs.'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ maxWidth: '700px', margin: '20px auto', padding: '0 20px', color: '#fff' }}>
+      <h2 style={{ color: '#00d9ff', marginBottom: '5px' }}>Practice Library</h2>
+      <p style={{ color: '#64748b', marginBottom: '25px', fontSize: '14px' }}>
+        Review challenges you've already solved. No EXP — just learning.
+      </p>
+
+      {solved.length === 0 && (
+        <div style={{ textAlign: 'center', color: '#64748b', marginTop: '60px' }}>
+          <div style={{ fontSize: '40px', marginBottom: '15px' }}>📚</div>
+          <p>Your library is empty.</p>
+          <p style={{ fontSize: '14px' }}>Solve some challenges to build your collection.</p>
+        </div>
+      )}
+
+      {solved.map(challenge => (
+        <div
+          key={challenge.id}
+          onClick={() => setSelected(challenge)}
+          className="challenge-card"
+          style={{ cursor: 'pointer' }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3 style={{ margin: 0, color: '#e2e8f0' }}>{challenge.title}</h3>
+            <span style={{ color: '#64748b', fontSize: '12px' }}>Review →</span>
+          </div>
+          <p style={{ margin: '8px 0 0 0', color: '#64748b', fontSize: '14px' }}>
+            Difficulty: {challenge.difficulty} | {challenge.language}
+          </p>
         </div>
       ))}
     </div>

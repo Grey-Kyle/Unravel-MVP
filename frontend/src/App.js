@@ -958,6 +958,10 @@ function Challenges({ token, refreshStats }) {
         <h2>{challenge.title}</h2>
         <p>Difficulty: {challenge.difficulty} | EXP: {challenge.exp_value}</p>
         <pre className="code-block">{challenge.code}</pre>
+
+<div style={{ background: '#1a1a2e', border: '1px solid #334155', borderRadius: '8px', padding: '14px 16px', marginBottom: '16px', color: '#94a3b8', fontSize: '14px' }}>
+  💡 <strong style={{ color: '#e2e8f0' }}>What to do:</strong> Look at the code above. What does it print to the console? Type the exact output below — every character matters.
+</div>
         
         <form onSubmit={handleSubmit}>
           <textarea
@@ -1024,6 +1028,9 @@ function Challenges({ token, refreshStats }) {
   return (
     <div className="challenges-list">
       <h2>Challenges</h2>
+<p style={{ color: '#64748b', fontSize: '14px', marginBottom: '20px' }}>
+  Read the code. Predict the output. Type it exactly.
+</p>
       {challenges.map((challenge, index) => (
         <div key={challenge.id} className="challenge-card" onClick={() => goToChallenge(index)}>
           <h3>{challenge.title}</h3>

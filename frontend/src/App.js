@@ -5,6 +5,141 @@ import './App.css';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
+function Sidebar({ view, setView, user, isAdmin, onLogout }) {
+  const items = [
+    { id: 'sprint', label: 'Sprint', icon: '🏃' },
+    { id: 'challenges', label: 'Challenges', icon: '🧩' },
+    { id: 'practice', label: 'Practice', icon: '📚' },
+    { id: 'create', label: 'Create', icon: '➕' },
+    { id: 'leaderboard', label: 'Leaderboard', icon: '🏆' },
+    ...(isAdmin ? [{ id: 'admin', label: 'Admin', icon: '👑' }] : []),
+  ];
+
+  return (
+    <aside style={{
+      width: '240px',
+      background: '#0a0f1c',
+      borderRight: '1px solid #1e293b',
+      display: 'flex',
+      flexDirection: 'column',
+      padding: '24px 0',
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      bottom: 0,
+      zIndex: 10
+    }}>
+      {/* Logo */}
+      <div style={{ padding: '0 24px 20px', borderBottom: '1px solid #1e293b', marginBottom: '12px' }}>
+        <h1 style={{ color: '#00d9ff', margin: 0, fontSize: '24px', letterSpacing: '-0.5px' }}>Unravel</h1>
+        <p style={{ color: '#64748b', margin: '6px 0 0', fontSize: '12px' }}>🟨 JavaScript</p>
+      </div>
+
+      {/* Navigation */}
+      <nav style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px', padding: '0 12px' }}>
+        {items.map(item => {
+          const active = view === item.id;
+          return (
+            <button
+              key={item.id}
+              onClick={() => setView(item.id)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                padding: '12px 16px',
+                borderRadius: '8px',
+                border: 'none',
+                background: active ? 'rgba(0, 217, 255, 0.08)' : 'transparent',
+                color: active ? '#00d9ff' : '#94a3b8',
+                fontSize: '15px',
+                fontWeight: active ? '600' : '400',
+                cursor: 'pointer',
+                textAlign: 'left',
+                borderLeft: active ? '3px solid #00d9ff' : '3px solid transparent',
+                transition: 'all 0.12s ease'
+              }}
+              onMouseEnter={(e) => {
+                if (!active) e.currentTarget.style.background = 'rgba(255,255,255,0.03)';
+              }}
+              onMouseLeave={(e) => {
+                if (!active) e.currentTarget.style.background = 'transparent';
+              }}
+            >
+              <span style={{ fontSize: '18px', width: '24px', textAlign: 'center' }}>{item.icon}</span>
+              <span>{item.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* User Card */}
+      <div style={{ padding: '16px 20px 0', borderTop: '1px solid #1e293b', marginTop: 'auto' }}>
+        <button
+          onClick={() => setView('profile')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            width: '100%',
+            padding: '10px',
+            borderRadius: '8px',
+            border: 'none',
+            background: view === 'profile' ? 'rgba(0, 217, 255, 0.08)' : 'transparent',
+            cursor: 'pointer',
+            textAlign: 'left',
+            marginBottom: '12px'
+          }}
+        >
+          <div style={{
+            width: '36px',
+            height: '36px',
+            borderRadius: '50%',
+            background: view === 'profile' ? 'rgba(0, 217, 255, 0.2)' : '#1e293b',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '18px',
+            border: view === 'profile' ? '2px solid #00d9ff' : '2px solid transparent'
+          }}>
+            👤
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ color: '#e2e8f0', fontSize: '14px', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {user?.username || 'User'}
+            </div>
+            <div style={{ color: '#64748b', fontSize: '12px' }}>{user?.rank || 'Novice'}</div>
+          </div>
+        </button>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', padding: '0 6px' }}>
+          <span style={{ color: '#64748b', fontSize: '12px' }}>EXP</span>
+          <span style={{ color: '#00d9ff', fontSize: '13px', fontWeight: 'bold' }}>{user?.exp ?? 0}</span>
+        </div>
+
+        <button
+          onClick={onLogout}
+          style={{
+            width: '100%',
+            padding: '10px',
+            borderRadius: '6px',
+            border: '1px solid #334155',
+            background: 'transparent',
+            color: '#94a3b8',
+            fontSize: '13px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '6px'
+          }}
+        >
+          🚪 Logout
+        </button>
+      </div>
+    </aside>
+  );
+}
 function App() {
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [user, setUser] = useState(null);
@@ -46,73 +181,44 @@ function App() {
   };
 
   return (
-    <div className="App">
-      <header className="app-header">
-        <h1>Unravel</h1>
-        {token && (
-          <div className="user-info" style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-            <span>
-              EXP: {user?.exp ?? '...'} | Rank: {user?.rank ?? '...'}
-            </span>
-            <button
-              onClick={() => setView('profile')}
-              title="Profile"
-              style={{
-                background: 'none',
-                border: '1px solid #00d9ff',
-                color: '#00d9ff',
-                borderRadius: '50%',
-                width: '36px',
-                height: '36px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                fontSize: '18px'
-              }}
-            >
-              👤
-            </button>
-            <button onClick={logout}>Logout</button>
-          </div>
-        )}
-      </header>
-
-      <nav className="nav">
-        {token && (
-          <>
-            <button onClick={() => setView('sprint')}>Sprint</button>
-            <button onClick={() => setView('challenges')}>Challenges</button>
-            <button onClick={() => setView('practice')}>Practice</button>
-            <button onClick={() => setView('create')}>Create Challenge</button>
-            <button onClick={() => setView('leaderboard')}>Leaderboard</button>
-            {isAdmin && (
-              <button onClick={() => setView('admin')} className="admin-btn">
-                👑 Admin Dashboard
-              </button>
+    <div className="App" style={{ display: 'flex', minHeight: '100vh', background: '#0f172a' }}>
+      {token && (
+        <Sidebar 
+          view={view} 
+          setView={setView} 
+          user={user} 
+          isAdmin={isAdmin} 
+          onLogout={logout} 
+        />
+      )}
+      
+      <div style={{ 
+        flex: 1, 
+        marginLeft: token ? '240px' : '0',
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column'
+      }}>
+        {!token ? (
+          <main style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+            {view === 'login' && <Login setToken={setToken} setIsAdmin={setIsAdmin} setView={setView} />}
+            {view === 'register' && <Register setToken={setToken} setIsAdmin={setIsAdmin} setView={setView} />}
+          </main>
+        ) : (
+          <main style={{ flex: 1, padding: '30px' }}>
+            {view === 'sprint' && <Sprint token={token} />}
+            {view === 'challenges' && <Challenges key={challengesKey} token={token} refreshStats={fetchUserProfile} />}
+            {view === 'practice' && <Practice token={token} />}
+            {view === 'create' && <CreateChallenge token={token} isAdmin={isAdmin} onBack={() => setView('challenges')} onCreated={() => setChallengesKey(k => k + 1)} />}
+            {view === 'leaderboard' && <Leaderboard />}
+            {view === 'profile' && <ProfileView user={user} onBack={() => setView('challenges')} />}
+            {view === 'admin' && isAdmin && <AdminDashboard token={token} onBack={() => setView('challenges')} />}
+            {view === 'admin' && !isAdmin && (
+              <div className="error">Unauthorized: Admin access only.</div>
             )}
-          </>
+          </main>
         )}
-      </nav>
-
-      <main>
-        {!token && view === 'login' && (
-          <Login setToken={setToken} setIsAdmin={setIsAdmin} setView={setView} />
-        )}
-        {!token && view === 'register' && (
-          <Register setToken={setToken} setIsAdmin={setIsAdmin} setView={setView} />
-        )}
-        {token && view === 'sprint' && <Sprint token={token} />}
-        {token && view === 'challenges' && <Challenges key={challengesKey} token={token} refreshStats={fetchUserProfile} />}
-        {token && view === 'practice' && <Practice token={token} />}
-        {token && view === 'create' && <CreateChallenge token={token} isAdmin={isAdmin} onBack={() => setView('challenges')} onCreated={() => setChallengesKey(k => k + 1)} />}
-        {token && view === 'leaderboard' && <Leaderboard />}
-        {token && view === 'profile' && <ProfileView user={user} onBack={() => setView('challenges')} />}
-        {token && view === 'admin' && isAdmin && <AdminDashboard token={token} onBack={() => setView('challenges')} />}
-        {token && view === 'admin' && !isAdmin && (
-          <div className="error">Unauthorized: Admin access only.</div>
-        )}
-      </main>
+      </div>
     </div>
   );
 }

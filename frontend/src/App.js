@@ -11,6 +11,7 @@ function App() {
   const [view, setView] = useState(token ? 'home' : 'login');
   const [isAdmin, setIsAdmin] = useState(localStorage.getItem('isAdmin') === 'true');
   const [challengesKey, setChallengesKey] = useState(0);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   useEffect(() => {
     if (token) {
@@ -53,16 +54,19 @@ function App() {
           setView={setView} 
           user={user} 
           isAdmin={isAdmin} 
-          onLogout={logout} 
+          onLogout={logout}
+          sidebarOpen={sidebarOpen}
+          setSidebarOpen={setSidebarOpen}
         />
       )}
       
       <div style={{ 
         flex: 1, 
-        marginLeft: token ? '240px' : '0',
+        marginLeft: token ? (sidebarOpen ? '240px' : '60px') : '0',
         minHeight: '100vh',
         display: 'flex',
-        flexDirection: 'column'
+        flexDirection: 'column',
+        transition: 'margin-left 0.25s ease'
       }}>
         {!token ? (
           <main style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
@@ -89,7 +93,7 @@ function App() {
   );
 }
 
-function Sidebar({ view, setView, user, isAdmin, onLogout }) {
+function Sidebar({ view, setView, user, isAdmin, onLogout, sidebarOpen, setSidebarOpen }) {
   const items = [
     { id: 'home', label: 'Home', icon: '🏠' },
     { id: 'sprint', label: 'Sprint', icon: '🏃' },
@@ -102,7 +106,7 @@ function Sidebar({ view, setView, user, isAdmin, onLogout }) {
 
   return (
     <aside style={{
-      width: '240px',
+      width: sidebarOpen ? '240px' : '60px',
       background: '#0a0f1c',
       borderRight: '1px solid #1e293b',
       display: 'flex',
@@ -112,12 +116,48 @@ function Sidebar({ view, setView, user, isAdmin, onLogout }) {
       top: 0,
       left: 0,
       bottom: 0,
-      zIndex: 10
+      zIndex: 10,
+      transition: 'width 0.25s ease',
+      overflow: 'hidden'
     }}>
-      <div style={{ padding: '0 24px 20px', borderBottom: '1px solid #1e293b', marginBottom: '12px' }}>
-        <h1 style={{ color: '#00d9ff', margin: 0, fontSize: '24px', letterSpacing: '-0.5px' }}>Unravel</h1>
-        <p style={{ color: '#64748b', margin: '6px 0 0', fontSize: '12px' }}>🟨 JavaScript</p>
+      {/* Logo + Toggle */}
+      <div style={{ 
+        padding: sidebarOpen ? '0 24px 20px' : '0 14px 20px', 
+        borderBottom: '1px solid #1e293b', 
+        marginBottom: '12px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: sidebarOpen ? 'space-between' : 'center',
+        gap: '8px'
+      }}>
+        {sidebarOpen && (
+          <h1 style={{ color: '#00d9ff', margin: 0, fontSize: '24px', letterSpacing: '-0.5px', whiteSpace: 'nowrap' }}>Unravel</h1>
+        )}
+        <button
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          title={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+          style={{
+            background: 'none',
+            border: '1px solid #334155',
+            color: '#94a3b8',
+            borderRadius: '6px',
+            width: '32px',
+            height: '32px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            fontSize: '14px',
+            flexShrink: 0
+          }}
+        >
+          {sidebarOpen ? '◀' : '▶'}
+        </button>
       </div>
+
+      {sidebarOpen && (
+        <p style={{ color: '#64748b', margin: '0 24px 12px', fontSize: '12px' }}>🟨 JavaScript</p>
+      )}
 
       <nav style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px', padding: '0 12px' }}>
         {items.map(item => {
@@ -126,10 +166,11 @@ function Sidebar({ view, setView, user, isAdmin, onLogout }) {
             <button
               key={item.id}
               onClick={() => setView(item.id)}
+              title={sidebarOpen ? undefined : item.label}
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '12px',
+                gap: sidebarOpen ? '12px' : '0',
                 padding: '12px 16px',
                 borderRadius: '8px',
                 border: 'none',
@@ -140,7 +181,8 @@ function Sidebar({ view, setView, user, isAdmin, onLogout }) {
                 cursor: 'pointer',
                 textAlign: 'left',
                 borderLeft: active ? '3px solid #00d9ff' : '3px solid transparent',
-                transition: 'all 0.12s ease'
+                transition: 'all 0.12s ease',
+                justifyContent: sidebarOpen ? 'flex-start' : 'center'
               }}
               onMouseEnter={(e) => {
                 if (!active) e.currentTarget.style.background = 'rgba(255,255,255,0.03)';
@@ -149,20 +191,21 @@ function Sidebar({ view, setView, user, isAdmin, onLogout }) {
                 if (!active) e.currentTarget.style.background = 'transparent';
               }}
             >
-              <span style={{ fontSize: '18px', width: '24px', textAlign: 'center' }}>{item.icon}</span>
-              <span>{item.label}</span>
+              <span style={{ fontSize: '18px', width: '24px', textAlign: 'center', flexShrink: 0 }}>{item.icon}</span>
+              {sidebarOpen && <span>{item.label}</span>}
             </button>
           );
         })}
       </nav>
 
-      <div style={{ padding: '16px 20px 0', borderTop: '1px solid #1e293b', marginTop: 'auto' }}>
+      <div style={{ padding: sidebarOpen ? '16px 20px 0' : '16px 10px 0', borderTop: '1px solid #1e293b', marginTop: 'auto' }}>
         <button
           onClick={() => setView('profile')}
+          title={sidebarOpen ? undefined : 'Profile'}
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '12px',
+            gap: sidebarOpen ? '12px' : '0',
             width: '100%',
             padding: '10px',
             borderRadius: '8px',
@@ -170,7 +213,8 @@ function Sidebar({ view, setView, user, isAdmin, onLogout }) {
             background: view === 'profile' ? 'rgba(0, 217, 255, 0.08)' : 'transparent',
             cursor: 'pointer',
             textAlign: 'left',
-            marginBottom: '12px'
+            marginBottom: '12px',
+            justifyContent: sidebarOpen ? 'flex-start' : 'center'
           }}
         >
           <div style={{
@@ -182,42 +226,49 @@ function Sidebar({ view, setView, user, isAdmin, onLogout }) {
             alignItems: 'center',
             justifyContent: 'center',
             fontSize: '18px',
-            border: view === 'profile' ? '2px solid #00d9ff' : '2px solid transparent'
+            border: view === 'profile' ? '2px solid #00d9ff' : '2px solid transparent',
+            flexShrink: 0
           }}>
             👤
           </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ color: '#e2e8f0', fontSize: '14px', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {user?.username || 'User'}
+          {sidebarOpen && (
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ color: '#e2e8f0', fontSize: '14px', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {user?.username || 'User'}
+              </div>
+              <div style={{ color: '#64748b', fontSize: '12px' }}>{user?.rank || 'Novice'}</div>
             </div>
-            <div style={{ color: '#64748b', fontSize: '12px' }}>{user?.rank || 'Novice'}</div>
-          </div>
+          )}
         </button>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', padding: '0 6px' }}>
-          <span style={{ color: '#64748b', fontSize: '12px' }}>EXP</span>
-          <span style={{ color: '#00d9ff', fontSize: '13px', fontWeight: 'bold' }}>{user?.exp ?? 0}</span>
-        </div>
+        {sidebarOpen && (
+          <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', padding: '0 6px' }}>
+              <span style={{ color: '#64748b', fontSize: '12px' }}>EXP</span>
+              <span style={{ color: '#00d9ff', fontSize: '13px', fontWeight: 'bold' }}>{user?.exp ?? 0}</span>
+            </div>
 
-        <button
-          onClick={onLogout}
-          style={{
-            width: '100%',
-            padding: '10px',
-            borderRadius: '6px',
-            border: '1px solid #334155',
-            background: 'transparent',
-            color: '#94a3b8',
-            fontSize: '13px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '6px'
-          }}
-        >
-          🚪 Logout
-        </button>
+            <button
+              onClick={onLogout}
+              style={{
+                width: '100%',
+                padding: '10px',
+                borderRadius: '6px',
+                border: '1px solid #334155',
+                background: 'transparent',
+                color: '#94a3b8',
+                fontSize: '13px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px'
+              }}
+            >
+              🚪 Logout
+            </button>
+          </>
+        )}
       </div>
     </aside>
   );
@@ -262,7 +313,6 @@ function Home({ user, token, setView }) {
 
   return (
     <div style={{ maxWidth: '700px', margin: '0 auto', color: '#fff' }}>
-      {/* Greeting */}
       <div style={{ marginBottom: '32px' }}>
         <h2 style={{ margin: '0 0 8px', color: '#e2e8f0', fontSize: '28px' }}>
           Hey {user?.username}, ready to sprint?
@@ -274,7 +324,6 @@ function Home({ user, token, setView }) {
         </p>
       </div>
 
-      {/* Big Sprint CTA */}
       <button
         onClick={() => setView('sprint')}
         style={{
@@ -298,16 +347,13 @@ function Home({ user, token, setView }) {
         Start Sprint
       </button>
 
-      {/* Stats Row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '32px' }}>
         <StatCard label="EXP" value={user?.exp ?? 0} />
         <StatCard label="Rank" value={user?.rank ?? 'Novice'} />
         <StatCard label="Solved" value={user?.challengesSolved ?? 0} />
       </div>
 
-      {/* Two Column Layout */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-        {/* Recent Activity */}
         <div>
           <h3 style={{ color: '#94a3b8', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }}>
             Recent Activity
@@ -341,7 +387,6 @@ function Home({ user, token, setView }) {
           )}
         </div>
 
-        {/* Daily Pick */}
         <div>
           <h3 style={{ color: '#94a3b8', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }}>
             Daily Pick
@@ -959,16 +1004,16 @@ function Challenges({ token, refreshStats }) {
         <p>Difficulty: {challenge.difficulty} | EXP: {challenge.exp_value}</p>
         <pre className="code-block">{challenge.code}</pre>
 
-<div style={{ background: '#1a1a2e', border: '1px solid #334155', borderRadius: '8px', padding: '14px 16px', marginBottom: '16px', color: '#94a3b8', fontSize: '14px' }}>
-  💡 <strong style={{ color: '#e2e8f0' }}>What to do:</strong> Look at the code above. What does it print to the console? Type the exact output below — every character matters.
-</div>
+        <div style={{ background: '#1a1a2e', border: '1px solid #334155', borderRadius: '8px', padding: '14px 16px', marginBottom: '16px', color: '#94a3b8', fontSize: '14px' }}>
+          💡 <strong style={{ color: '#e2e8f0' }}>What to do:</strong> Look at the code above. What does it print to the console? Type the exact output below — every character matters.
+        </div>
         
         <form onSubmit={handleSubmit}>
           <textarea
             className="answer-textarea"
             value={userOutput}
             onChange={(e) => setUserOutput(e.target.value)}
-            placeholder="Enter your output..."
+            placeholder="Type the exact console output here..."
             required
           />
           <button type="submit" disabled={submitting} className="answer-submit-btn">
@@ -1028,9 +1073,9 @@ function Challenges({ token, refreshStats }) {
   return (
     <div className="challenges-list">
       <h2>Challenges</h2>
-<p style={{ color: '#64748b', fontSize: '14px', marginBottom: '20px' }}>
-  Read the code. Predict the output. Type it exactly.
-</p>
+      <p style={{ color: '#64748b', fontSize: '14px', marginBottom: '20px' }}>
+        Read the code. Predict the console output. Type it exactly.
+      </p>
       {challenges.map((challenge, index) => (
         <div key={challenge.id} className="challenge-card" onClick={() => goToChallenge(index)}>
           <h3>{challenge.title}</h3>

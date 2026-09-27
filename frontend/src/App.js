@@ -71,7 +71,7 @@ function App() {
       }}>
         {!token ? (
           <main style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-            {view === 'landing' && <landing setView={setView} />}
+            {view === 'landing' && <Landing setView={setView} />}
             {view === 'login' && <Login setToken={setToken} setIsAdmin={setIsAdmin} setView={setView} />}
             {view === 'register' && <Register setToken={setToken} setIsAdmin={setIsAdmin} setView={setView} />}
           </main>

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import AdminDashboard from './AdminDashboard';
 import './App.css';
-import Landing from './landing';
+import landing from './landing';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
@@ -71,7 +71,7 @@ function App() {
       }}>
         {!token ? (
           <main style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-            {view === 'landing' && <Landing setView={setView} />}
+            {view === 'landing' && <landing setView={setView} />}
             {view === 'login' && <Login setToken={setToken} setIsAdmin={setIsAdmin} setView={setView} />}
             {view === 'register' && <Register setToken={setToken} setIsAdmin={setIsAdmin} setView={setView} />}
           </main>

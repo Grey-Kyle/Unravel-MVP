@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import './Landing.css';
+import './landing.css';
 
 /* Unravel landing page — the front door to the existing app.
    Uses only the setView prop passed from App.js. No new auth, API, or routing. */

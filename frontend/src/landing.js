@@ -211,7 +211,7 @@ export default function Landing({ setView }) {
               <button type="button" className="ul-btn ul-btn-primary ul-btn-lg" onClick={start}>Start Unraveling →</button>
               <button type="button" className="ul-btn ul-btn-ghost ul-btn-lg" onClick={() => setView('login')}>I have an account</button>
             </div>
-            <p className="ul-mono ul-xs ul-muted ul-mt">// no writing code. just reading it better than everyone else.</p>
+            <p className="ul-mono ul-xs ul-muted ul-mt">/* no writing code. just reading it better than everyone else.*/</p>
           </div>
           <div className="ul-fadeup ul-float" style={{ animationDelay: '150ms' }}>
             <ChallengeCard />

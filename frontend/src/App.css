@@ -563,10 +563,20 @@ button {
     font-size: 0.9rem;
   }
 }
+/* MOBILE SIDEBAR */
 @media (max-width: 768px) {
   .app-sidebar {
+    z-index: 1000 !important;
+    transition: width 0.25s ease !important;
+  }
+
+  .app-sidebar.sidebar-closed {
     width: 60px !important;
-    padding: 16px 0 !important;
+  }
+
+  .app-sidebar.sidebar-open {
+    width: 240px !important;
+    box-shadow: 8px 0 30px rgba(0, 0, 0, 0.4);
   }
 
   .app-sidebar nav {

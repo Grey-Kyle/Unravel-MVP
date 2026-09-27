@@ -108,7 +108,7 @@ function Sidebar({ view, setView, user, isAdmin, onLogout, sidebarOpen, setSideb
 
   return (
     <aside
-     className="app-sidebar"
+     className={`app-sidebar ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}
      style={{
       width: sidebarOpen ? '240px' : '60px',
       background: '#0a0f1c',

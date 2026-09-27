@@ -419,7 +419,7 @@ button {
   background: #0f0f1e;
   color: #00ff88;
   font-family: 'Courier New', monospace;
-  font-size: 15px;
+  font-size: 16px;
   resize: vertical;
   outline: none;
   transition: all 0.2s ease;
@@ -467,4 +467,99 @@ button {
   color: #94a3b8;
   cursor: not-allowed;
   box-shadow: none;
+}
+
+/* MOBILE RESPONSIVE */
+@media (max-width: 768px) {
+
+  .App {
+    width: 100%;
+    max-width: 100%;
+    padding: 12px;
+  }
+
+  .app-header {
+    padding: 12px 0;
+  }
+
+  .app-header h1 {
+    font-size: 1.5rem;
+  }
+
+  .user-info {
+    gap: 8px;
+  }
+
+  .auth-form {
+    width: 100%;
+    max-width: 400px;
+    margin: 25px auto;
+    padding: 20px;
+  }
+
+  .challenges,
+  .leaderboard,
+  .create-challenge {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .challenge-card {
+    padding: 16px;
+  }
+
+  .challenge-meta {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .challenge-detail {
+    padding: 16px;
+  }
+
+  .challenge-info {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .code-block {
+    max-width: 100%;
+    overflow-x: auto;
+    padding: 14px;
+  }
+
+  .code-block pre {
+    font-size: 0.85rem;
+    white-space: pre;
+  }
+
+  .answer-section textarea,
+  .answer-textarea {
+    font-size: 16px;
+  }
+
+  .form-group input,
+  .form-group textarea,
+  .form-group select {
+    font-size: 16px;
+  }
+
+  .answer-submit-btn,
+  .create-submit-btn {
+    width: 100%;
+  }
+
+  .leaderboard {
+    overflow-x: auto;
+  }
+
+  .leaderboard table {
+    min-width: 500px;
+  }
+
+  .leaderboard th,
+  .leaderboard td {
+    padding: 10px;
+    font-size: 0.9rem;
+  }
 }

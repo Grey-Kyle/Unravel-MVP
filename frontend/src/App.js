@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import AdminDashboard from './AdminDashboard';
 import './App.css';
-import landing from './landing';
+import Landing from './landing';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 

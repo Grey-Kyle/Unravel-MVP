@@ -563,3 +563,17 @@ button {
     font-size: 0.9rem;
   }
 }
+@media (max-width: 768px) {
+  .app-sidebar {
+    width: 60px !important;
+    padding: 16px 0 !important;
+  }
+
+  .app-sidebar nav {
+    padding: 0 8px !important;
+  }
+
+  .app-sidebar nav button {
+    padding: 12px 8px !important;
+  }
+}

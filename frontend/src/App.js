@@ -12,7 +12,7 @@ function App() {
   const [view, setView] = useState(token ? 'home' : 'landing');
   const [isAdmin, setIsAdmin] = useState(localStorage.getItem('isAdmin') === 'true');
   const [challengesKey, setChallengesKey] = useState(0);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
 
   useEffect(() => {
     if (token) {
@@ -107,7 +107,9 @@ function Sidebar({ view, setView, user, isAdmin, onLogout, sidebarOpen, setSideb
   ];
 
   return (
-    <aside style={{
+    <aside
+     className="app-sidebar"
+     style={{
       width: sidebarOpen ? '240px' : '60px',
       background: '#0a0f1c',
       borderRight: '1px solid #1e293b',

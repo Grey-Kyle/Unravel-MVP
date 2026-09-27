@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import AdminDashboard from './AdminDashboard';
 import './App.css';
+import Landing from './landing';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [user, setUser] = useState(null);
-  const [view, setView] = useState(token ? 'home' : 'login');
+  const [view, setView] = useState(token ? 'home' : 'landing');
   const [isAdmin, setIsAdmin] = useState(localStorage.getItem('isAdmin') === 'true');
   const [challengesKey, setChallengesKey] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -70,6 +71,7 @@ function App() {
       }}>
         {!token ? (
           <main style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+            {view === 'landing' && <Landing setView={setView} />}
             {view === 'login' && <Login setToken={setToken} setIsAdmin={setIsAdmin} setView={setView} />}
             {view === 'register' && <Register setToken={setToken} setIsAdmin={setIsAdmin} setView={setView} />}
           </main>

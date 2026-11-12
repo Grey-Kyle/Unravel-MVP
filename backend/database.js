@@ -43,6 +43,11 @@ const initDb = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+        await pool.query(`
+      ALTER TABLE challenges
+      ADD COLUMN IF NOT EXISTS input_data TEXT NOT NULL DEFAULT ''
+    `);
+
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS attempts (

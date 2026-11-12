@@ -575,7 +575,7 @@ function Sprint({ token }) {
   const [elapsed, setElapsed] = useState(0);
   const [result, setResult] = useState(null);
   const [board, setBoard] = useState([]);
-
+  const [language, setLanguage] = useState(null);
   useEffect(() => {
     let interval;
     if (phase === 'playing') {
@@ -584,23 +584,29 @@ function Sprint({ token }) {
     return () => clearInterval(interval);
   }, [phase, startTime]);
 
-  const start = async () => {
-    try {
-      const res = await axios.get(`${API_URL}/api/sprint`, {
+  const start = async (selectedLanguage = language) => {
+  try {
+    const res = await axios.get(
+      `${API_URL}/api/sprint?language=${selectedLanguage}`,
+      {
         headers: { Authorization: `Bearer ${token}` }
-      });
-      setPool(res.data.challenges);
-      setIndex(0);
-      setCorrect(0);
-      setWrong(0);
-      setAnswers([]);
-      setElapsed(0);
-      setStartTime(Date.now());
-      setPhase('playing');
-    } catch (err) {
-      alert('Failed to load sprint');
-    }
-  };
+      }
+    );
+
+    setLanguage(selectedLanguage);
+    setPool(res.data.challenges);
+    setIndex(0);
+    setCorrect(0);
+    setWrong(0);
+    setAnswers([]);
+    setElapsed(0);
+    setStartTime(Date.now());
+    setResult(null);
+    setPhase('playing');
+  } catch (err) {
+    alert('Failed to load sprint');
+  }
+};
 
   const guess = (runs) => {
     const current = pool[index];
@@ -640,7 +646,7 @@ function Sprint({ token }) {
     try {
       const res = await axios.post(
         `${API_URL}/api/sprint/submit`,
-        { answers: finalAnswers, rawTimeMs: raw },
+        { answers: finalAnswers, rawTimeMs: raw, language },
         { headers: { Authorization: `Bearer ${token}` } }
       );
       setResult(res.data);

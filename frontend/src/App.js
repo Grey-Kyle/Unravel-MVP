@@ -685,7 +685,7 @@ function Sprint({ token }) {
           Wrong guesses add +2s penalty.
         </p>
         <button
-          onClick={start}
+          onClick={() => start(language)}
           style={{
             width: '100%',
             padding: '18px',
@@ -726,7 +726,7 @@ function Sprint({ token }) {
       fontWeight: 'bold',
       borderRadius: '12px',
       border: 'none',
-      background: '#facc15',
+      background: '#00d9ff',
       color: '#0f172a',
       cursor: 'pointer'
     }}
@@ -868,7 +868,7 @@ function Sprint({ token }) {
         )}
 
         <button
-          onClick={start}
+          onClick={() => start(language)}
           style={{
             width: '100%',
             padding: '16px',

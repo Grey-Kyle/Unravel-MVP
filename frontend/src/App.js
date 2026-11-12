@@ -699,21 +699,41 @@ function Sprint({ token }) {
           }}
         >
           Start Sprint
-        </button>
-        <button
-          onClick={loadLeaderboard}
-          style={{
-            marginTop: '15px',
-            width: '100%',
-            padding: '14px',
-            fontSize: '16px',
-            borderRadius: '12px',
-            border: '1px solid #334155',
-            background: 'transparent',
-            color: '#94a3b8',
-            cursor: 'pointer'
-          }}
-        >
+        <div style={{ display: 'flex', gap: '12px' }}>
+  <button
+    onClick={() => start('javascript')}
+    style={{
+      flex: 1,
+      padding: '18px',
+      fontSize: '17px',
+      fontWeight: 'bold',
+      borderRadius: '12px',
+      border: 'none',
+      background: '#00d9ff',
+      color: '#0f172a',
+      cursor: 'pointer'
+    }}
+  >
+    JavaScript
+  </button>
+
+  <button
+    onClick={() => start('python')}
+    style={{
+      flex: 1,
+      padding: '18px',
+      fontSize: '17px',
+      fontWeight: 'bold',
+      borderRadius: '12px',
+      border: 'none',
+      background: '#facc15',
+      color: '#0f172a',
+      cursor: 'pointer'
+    }}
+  >
+    Python
+  </button>
+</div>
           View Leaderboard
         </button>
       </div>
